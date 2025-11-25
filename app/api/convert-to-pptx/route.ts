@@ -4,15 +4,27 @@ import PptxGenJS from "pptxgenjs";
 
 const IS_VERCEL = process.env.VERCEL_ENV === 'production' || process.env.VERCEL_ENV === 'preview';
 
-let puppeteer: any;
-let chromium: any;
+// Helper function to get the Puppeteer browser instance based on environment
+async function getBrowserInstance() {
+  let puppeteer: any;
+  let chromium: any;
 
-if (IS_VERCEL) {
-  puppeteer = require('puppeteer-core');
-  chromium = require('@sparticuz/chromium');
-} else {
-  // Use the full puppeteer package installed as a devDependency for local development
-  puppeteer = require('puppeteer');
+  if (IS_VERCEL) {
+    puppeteer = require('puppeteer-core');
+    chromium = require('@sparticuz/chromium');
+    return await puppeteer.launch({
+      args: chromium.args,
+      defaultViewport: chromium.defaultViewport,
+      executablePath: await chromium.executablePath(),
+      headless: chromium.headless,
+    });
+  } else {
+    // Use the full puppeteer package installed as a devDependency for local development
+    puppeteer = require('puppeteer');
+    return await puppeteer.launch({
+      headless: true, // Use true for local headless, or false for visible browser
+    });
+  }
 }
 
 export async function POST(request: Request) {
@@ -33,19 +45,7 @@ export async function POST(request: Request) {
     const styleTags = $('head').html();
 
     // 2. Take screenshots of each slide
-    const browser = await puppeteer.launch(
-      IS_VERCEL
-        ? {
-            args: chromium.args,
-            defaultViewport: chromium.defaultViewport,
-            executablePath: await chromium.executablePath(),
-            headless: chromium.headless,
-          }
-        : {
-            // Local development: puppeteer will find a local Chromium install
-            headless: true, // Use true for local headless, or false for visible browser
-          }
-    );
+    const browser = await getBrowserInstance();
     const page = await browser.newPage();
     const screenshotBuffers: Buffer[] = [];
 
