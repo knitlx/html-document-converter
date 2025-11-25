@@ -87,7 +87,7 @@ export async function POST(request: Request) {
     // 4. Send the PPTX file to the client
     const pptxBuffer = await pptx.write({ outputType: 'arraybuffer' });
 
-    return new NextResponse(Buffer.from(pptxBuffer), {
+    return new NextResponse(pptxBuffer, {
       status: 200,
       headers: {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
