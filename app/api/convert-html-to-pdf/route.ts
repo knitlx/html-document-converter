@@ -4,7 +4,7 @@ import { Buffer } from 'buffer';
 
 // Use direct imports for puppeteer-core and @sparticuz/chromium
 // These are production dependencies for Vercel
-import puppeteerCore from 'puppeteer-core';
+import puppeteerCore, { Browser, LaunchOptions, PDFOptions } from 'puppeteer-core';
 import chromium from '@sparticuz/chromium';
 
 // Type definitions for process.env (optional but good practice)
@@ -28,7 +28,7 @@ if (process.env.NODE_ENV === 'development' && !process.env.VERCEL_ENV) {
 }
 
 export async function POST(req: NextRequest) {
-  let browser: puppeteerCore.Browser | undefined; // Explicitly type browser
+  let browser: Browser | undefined; // Explicitly type browser
   try {
     const { htmlContent, options } = await req.json();
 
@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
           `https://github.com/Sparticuz/chromium/releases/download/v${chromium.revision}/chromium-v${chromium.revision}-pack.tar`
         ),
         headless: chromium.headless,
-      } as puppeteerCore.LaunchOptions); // Cast to LaunchOptions for type safety
+      } as LaunchOptions); // Cast to LaunchOptions for type safety
     } else if (localPuppeteer) {
       // For local development, use the full puppeteer package (if found)
       browser = await localPuppeteer.launch({
@@ -65,14 +65,14 @@ export async function POST(req: NextRequest) {
         defaultViewport: chromium.defaultViewport,
         executablePath: await chromium.executablePath(), // puppeteer-core tries to find local Chrome
         headless: true,
-      } as puppeteerCore.LaunchOptions);
+      } as LaunchOptions);
     }
 
     const page = await browser.newPage();
 
     await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
 
-    const pdfOptions: puppeteerCore.PDFOptions = { // Explicitly type pdfOptions
+    const pdfOptions: PDFOptions = { // Explicitly type pdfOptions
       format: 'A4' as const,
       printBackground: true,
       margin: options?.margin,
