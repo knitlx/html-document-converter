@@ -12,7 +12,6 @@ declare global {
   namespace NodeJS {
     interface ProcessEnv {
       VERCEL_ENV: string | undefined;
-      NODE_ENV: string;
     }
   }
 }
