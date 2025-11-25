@@ -137,7 +137,8 @@ export async function POST(req: NextRequest) {
         fullPage: false,
         clip: { x: 0, y: 0, width: 960, height: 540 },
       });
-      slide.addImage({ data: imageBuffer.toString('base64'), x: 0, y: 0, w: '100%', h: '100%' });
+      const currentSlide = pptx.addSlide(); // Add this line
+      currentSlide.addImage({ data: imageBuffer.toString('base64'), x: 0, y: 0, w: '100%', h: '100%' });
     }
 
     const pptxBuffer = await pptx.write({ outputType: 'arraybuffer' });
