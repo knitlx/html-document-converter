@@ -2,39 +2,42 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Buffer } from 'buffer';
 
-// Explicitly import all types and the value 'puppeteerCore' from puppeteer-core
-import puppeteerCore, { Browser, LaunchOptions, PDFOptions } from 'puppeteer-core';
-// Import chromium for its types and executablePath function
-import * as chromium from '@sparticuz/chromium';
+// Import types for puppeteer (used for local development)
+import type * as pp from 'puppeteer';
+// Import types for puppeteer-core and its associated types
+import type * as ppc from 'puppeteer-core';
 
 // Type definitions for process.env
 declare global {
   namespace NodeJS {
     interface ProcessEnv {
       VERCEL_ENV: string | undefined;
-      // NODE_ENV is already globally defined by @types/node
     }
   }
 }
 
 export async function POST(req: NextRequest) {
-  let browser: Browser | undefined;
-  // Declare puppeteer with a union type to accommodate conditional loading
-  let puppeteer: typeof puppeteerCore;
+  let browser: pp.Browser | ppc.Browser | undefined; // Use union type for browser
+  let puppeteer: typeof pp | typeof ppc;
+  let chromium: typeof import('@sparticuz/chromium');
 
   const isVercel = process.env.VERCEL_ENV === 'production' || process.env.VERCEL_ENV === 'preview';
 
   if (isVercel) {
-    // In Vercel, use puppeteer-core (which is already imported as puppeteerCore)
-    puppeteer = puppeteerCore;
+    // Dynamically import for Vercel
+    puppeteer = require('puppeteer-core');
+    chromium = require('@sparticuz/chromium');
   } else {
-    // In local development, try to use the full 'puppeteer' package
+    // Dynamically import for local development
     try {
-      // eslint-disable-next-line global-require
       puppeteer = require('puppeteer');
+      // For local development, we don't strictly need @sparticuz/chromium
+      // But we keep the import to satisfy the 'chromium' variable type
+      chromium = require('@sparticuz/chromium'); // Still load for its args/defaultViewport
     } catch (error) {
       console.warn('Full puppeteer not found locally. Falling back to puppeteer-core.', error);
-      puppeteer = puppeteerCore; // Fallback to puppeteerCore if full puppeteer is not available
+      puppeteer = require('puppeteer-core');
+      chromium = require('@sparticuz/chromium');
     }
   }
 
@@ -52,13 +55,13 @@ export async function POST(req: NextRequest) {
       defaultViewport: chromium.defaultViewport,
       executablePath: isVercel ? await chromium.executablePath() : undefined, // Let chromium resolve path on Vercel, puppeteer finds it locally
       headless: isVercel ? chromium.headless : true, // Use chromium.headless for Vercel, true for local
-    } as LaunchOptions); // Cast to LaunchOptions for type safety
+    });
 
     const page = await browser.newPage();
 
     await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
 
-    const pdfOptions: PDFOptions = {
+    const pdfOptions: pp.PDFOptions | ppc.PDFOptions = { // Use union type for PDFOptions
       format: 'A4' as const,
       printBackground: true,
       margin: options?.margin,
