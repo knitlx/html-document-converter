@@ -1,15 +1,15 @@
 // app/api/convert-to-pptx/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { Buffer } from 'buffer';
-import { load } from 'cheerio'; // Make sure cheerio is imported
+import { load } from 'cheerio';
 import PptxGenJS from 'pptxgenjs';
 
-// Use direct imports for puppeteer-core and @sparticuz/chromium
-// These are production dependencies for Vercel
+// Explicitly import all types and the value 'puppeteerCore' from puppeteer-core
 import puppeteerCore, { Browser, LaunchOptions } from 'puppeteer-core';
-import chromium from '@sparticuz/chromium';
+// Import chromium for its types and executablePath function
+import * as chromium from '@sparticuz/chromium';
 
-// Type definitions for process.env (optional but good practice)
+// Type definitions for process.env
 declare global {
   namespace NodeJS {
     interface ProcessEnv {
@@ -18,19 +18,27 @@ declare global {
   }
 }
 
-// Conditional require for local development using the full puppeteer package
-let localPuppeteer: typeof puppeteerCore | undefined; // Use puppeteerCore type for consistency
-if (process.env.NODE_ENV === 'development' && !process.env.VERCEL_ENV) {
-  try {
-    // eslint-disable-next-line global-require
-    localPuppeteer = require('puppeteer');
-  } catch (error) {
-    console.warn('Full puppeteer not found locally, falling back to puppeteer-core.', error);
-  }
-}
-
 export async function POST(req: NextRequest) {
-  let browser: Browser | undefined; // Explicitly type browser
+  let browser: Browser | undefined;
+  // Declare puppeteer with a union type to accommodate conditional loading
+  let puppeteer: typeof puppeteerCore;
+
+  const isVercel = process.env.VERCEL_ENV === 'production' || process.env.VERCEL_ENV === 'preview';
+
+  if (isVercel) {
+    // In Vercel, use puppeteer-core (which is already imported as puppeteerCore)
+    puppeteer = puppeteerCore;
+  } else {
+    // In local development, try to use the full 'puppeteer' package
+    try {
+      // eslint-disable-next-line global-require
+      puppeteer = require('puppeteer');
+    } catch (error) {
+      console.warn('Full puppeteer not found locally. Falling back to puppeteer-core.', error);
+      puppeteer = puppeteerCore; // Fallback to puppeteerCore if full puppeteer is not available
+    }
+  }
+
   try {
     const { htmlContent } = await req.json();
 
@@ -38,32 +46,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'HTML content is required' }, { status: 400 });
     }
 
-    const isVercel = process.env.VERCEL_ENV === 'production' || process.env.VERCEL_ENV === 'preview';
-
-    if (isVercel) {
-      // For Vercel, use puppeteer-core with @sparticuz/chromium
-      browser = await puppeteerCore.launch({
-        args: [...chromium.args, '--hide-scrollbars', '--disable-web-security'],
-        defaultViewport: chromium.defaultViewport,
-        executablePath: await chromium.executablePath(),
-        headless: chromium.headless,
-      } as LaunchOptions);
-    } else if (localPuppeteer) {
-      // For local development, use the full puppeteer package (if found)
-      browser = await localPuppeteer.launch({
-        headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox'],
-      });
-    } else {
-      // Fallback for local development if full puppeteer isn't available
-      console.warn('Neither Vercel environment nor full puppeteer found. Attempting to launch puppeteer-core locally.');
-      browser = await puppeteerCore.launch({
-        args: [...chromium.args, '--hide-scrollbars', '--disable-web-security'],
-        defaultViewport: chromium.defaultViewport,
-        executablePath: await chromium.executablePath(), // puppeteer-core tries to find local Chrome
-        headless: true,
-      } as LaunchOptions);
-    }
+    browser = await puppeteer.launch({
+      args: [...chromium.args, '--hide-scrollbars', '--disable-web-security'],
+      defaultViewport: chromium.defaultViewport,
+      executablePath: isVercel ? await chromium.executablePath() : undefined, // Let chromium resolve path on Vercel, puppeteer finds it locally
+      headless: isVercel ? chromium.headless : true, // Use chromium.headless for Vercel, true for local
+    } as LaunchOptions);
 
     const page = await browser.newPage();
     const $ = load(htmlContent);
@@ -118,7 +106,8 @@ export async function POST(req: NextRequest) {
                 b, strong { font-weight: bold !important; }
                 i, em { font-style: italic !important; }
                 u { text-decoration: underline !important; }
-                ${originalStyles.join('\n')}
+                ${originalStyles.join('
+')}
             </style>
         </head>
         <body>
@@ -137,7 +126,7 @@ export async function POST(req: NextRequest) {
         fullPage: false,
         clip: { x: 0, y: 0, width: 960, height: 540 },
       });
-      const currentSlide = pptx.addSlide(); // Add this line
+      const currentSlide = pptx.addSlide();
       currentSlide.addImage({ data: imageBuffer.toString('base64'), x: 0, y: 0, w: '100%', h: '100%' });
     }
 
