@@ -45,9 +45,7 @@ export async function POST(req: NextRequest) {
       browser = await puppeteerCore.launch({
         args: [...chromium.args, '--hide-scrollbars', '--disable-web-security'],
         defaultViewport: chromium.defaultViewport,
-        executablePath: await chromium.executablePath(
-          `https://github.com/Sparticuz/chromium/releases/download/v${chromium.revision}/chromium-v${chromium.revision}-pack.tar`
-        ),
+        executablePath: await chromium.executablePath(),
         headless: chromium.headless,
       } as LaunchOptions);
     } else if (localPuppeteer) {
