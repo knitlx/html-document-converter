@@ -1,133 +1,167 @@
-import { NextResponse } from "next/server";
-import { load } from "cheerio";
-import PptxGenJS from "pptxgenjs";
-import { Buffer } from 'buffer'; // Explicitly import Buffer
+// app/api/convert-to-pptx/route.ts
+import { NextRequest, NextResponse } from 'next/server';
+import { Buffer } from 'buffer';
+import { load } from 'cheerio'; // Make sure cheerio is imported
+import PptxGenJS from 'pptxgenjs';
 
-// Explicitly import the types for the modules
-import type * as puppeteerCore from 'puppeteer-core';
-import type * as puppeteerFull from 'puppeteer';
-import type * as chromiumType from '@sparticuz/chromium';
+// Use direct imports for puppeteer-core and @sparticuz/chromium
+// These are production dependencies for Vercel
+import puppeteerCore from 'puppeteer-core';
+import chromium from '@sparticuz/chromium';
 
-const IS_VERCEL = process.env.VERCEL_ENV === 'production' || process.env.VERCEL_ENV === 'preview';
-
-let puppeteer: typeof puppeteerCore | typeof puppeteerFull;
-let chromium: typeof chromiumType | undefined;
-
-if (IS_VERCEL) {
-  // Dynamically require for Vercel
-  puppeteer = require('puppeteer-core') as typeof puppeteerCore;
-  chromium = require('@sparticuz/chromium') as typeof chromiumType;
-} else {
-  // Dynamically require for local development
-  puppeteer = require('puppeteer') as typeof puppeteerFull;
+// Type definitions for process.env (optional but good practice)
+declare global {
+  namespace NodeJS {
+    interface ProcessEnv {
+      VERCEL_ENV: string | undefined;
+      NODE_ENV: string;
+    }
+  }
 }
 
-export async function POST(request: Request) {
+// Conditional require for local development using the full puppeteer package
+let localPuppeteer: typeof puppeteerCore | undefined; // Use puppeteerCore type for consistency
+if (process.env.NODE_ENV === 'development' && !process.env.VERCEL_ENV) {
   try {
-    const { htmlContent } = await request.json();
+    // eslint-disable-next-line global-require
+    localPuppeteer = require('puppeteer');
+  } catch (error) {
+    console.warn('Full puppeteer not found locally, falling back to puppeteer-core.', error);
+  }
+}
+
+export async function POST(req: NextRequest) {
+  let browser: puppeteerCore.Browser | undefined; // Explicitly type browser
+  try {
+    const { htmlContent } = await req.json();
 
     if (!htmlContent) {
-      return NextResponse.json({ error: "HTML content is required" }, { status: 400 });
+      return NextResponse.json({ error: 'HTML content is required' }, { status: 400 });
     }
 
-    // 1. Load HTML and extract slides and styles
+    const isVercel = process.env.VERCEL_ENV === 'production' || process.env.VERCEL_ENV === 'preview';
+
+    if (isVercel) {
+      // For Vercel, use puppeteer-core with @sparticuz/chromium
+      browser = await puppeteerCore.launch({
+        args: [...chromium.args, '--hide-scrollbars', '--disable-web-security'],
+        defaultViewport: chromium.defaultViewport,
+        executablePath: await chromium.executablePath(
+          `https://github.com/Sparticuz/chromium/releases/download/v${chromium.revision}/chromium-v${chromium.revision}-pack.tar`
+        ),
+        headless: chromium.headless,
+      } as puppeteerCore.LaunchOptions);
+    } else if (localPuppeteer) {
+      // For local development, use the full puppeteer package (if found)
+      browser = await localPuppeteer.launch({
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      });
+    } else {
+      // Fallback for local development if full puppeteer isn't available
+      console.warn('Neither Vercel environment nor full puppeteer found. Attempting to launch puppeteer-core locally.');
+      browser = await puppeteerCore.launch({
+        args: [...chromium.args, '--hide-scrollbars', '--disable-web-security'],
+        defaultViewport: chromium.defaultViewport,
+        executablePath: await chromium.executablePath(), // puppeteer-core tries to find local Chrome
+        headless: true,
+      } as puppeteerCore.LaunchOptions);
+    }
+
+    const page = await browser.newPage();
     const $ = load(htmlContent);
     const slidesHtml: string[] = [];
-    $('div.slide').each((i, slide) => {
-      slidesHtml.push($.html(slide));
+
+    // Extract original styles from the head of the HTML content
+    const originalStyles: string[] = [];
+    $('style').each((_, element) => {
+      originalStyles.push($(element).html() || '');
+    });
+    $('link[rel="stylesheet"]').each((_, element) => {
+      const href = $(element).attr('href');
+      if (href) {
+        originalStyles.push(`@import url("${href}");`);
+      }
     });
 
-    const styleTags = $('head').html();
+    $('div.slide').each((_, element) => {
+      slidesHtml.push($(element).html() || '');
+    });
 
-    // 2. Take screenshots of each slide
-    const browser = await puppeteer.launch(
-      IS_VERCEL
-        ? {
-            args: chromium!.args, // Use non-null assertion as chromium is defined if IS_VERCEL
-            defaultViewport: chromium!.defaultViewport,
-            executablePath: await chromium!.executablePath(),
-            headless: chromium!.headless,
-          }
-        : {
-            // Local development: puppeteer will find a local Chromium install
-            headless: true, // Use true for local headless, or false for visual debugging
-          }
-    );
-    const page = await browser.newPage();
-    const screenshotBuffers: Buffer[] = [];
+    if (slidesHtml.length === 0) {
+      slidesHtml.push(htmlContent); // Fallback: use entire content as one slide
+    }
 
-    for (const slideHtml of slidesHtml) {
-      const tempHtml = `
+    const pptx = new PptxGenJS();
+    pptx.layout = 'LAYOUT_16_9';
+
+    for (const [index, slideHtmlContent] of slidesHtml.entries()) {
+      const fullHtml = `
         <!DOCTYPE html>
         <html lang="en">
-          <head>
-            ${styleTags}
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Slide ${index + 1}</title>
             <style>
-              body { margin: 0; padding: 0; }
-              #wrapper {
-                width: 960px;
-                height: 540px;
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                /* padding: 25px; <<< REMOVED */
-                box-sizing: border-box; 
-              }
-              .slide {
-                opacity: 1 !important;
-                display: flex !important;
-                position: relative !important;
-                /* The slide should be flexible, the wrapper will constrain it */
-                max-width: 100%;
-                max-height: 100%;
-              }
+                body { margin: 0; padding: 0; }
+                .slide-wrapper {
+                    width: 960px;
+                    height: 540px;
+                    overflow: hidden;
+                    box-sizing: border-box;
+                    background-color: white;
+                }
+                p, h1, h2, h3, h4, h5, h6, ul, ol, li {
+                    color: black !important;
+                    font-family: sans-serif !important;
+                    margin: 0.5em 0 !important;
+                    padding: 0 !important;
+                }
+                b, strong { font-weight: bold !important; }
+                i, em { font-style: italic !important; }
+                u { text-decoration: underline !important; }
+                ${originalStyles.join('
+')}
             </style>
-          </head>
-          <body>
-            <div id="wrapper">
-              ${slideHtml}
+        </head>
+        <body>
+            <div class="slide-wrapper">
+                ${slideHtmlContent}
             </div>
-          </body>
+        </body>
         </html>
       `;
-      
-      await page.setContent(tempHtml, { waitUntil: 'load' });
-      await page.setViewport({ width: 960, height: 540, deviceScaleFactor: 2 }); 
 
-      // Screenshot the entire viewport, which is staged by the #wrapper, and ensure it's a Buffer
-      const screenshot = await page.screenshot();
-      screenshotBuffers.push(Buffer.from(screenshot));
-    }
-    await browser.close();
+      await page.setViewport({ width: 960, height: 540, deviceScaleFactor: 2 });
+      await page.setContent(fullHtml, { waitUntil: 'networkidle0' });
 
-    // 3. Generate PPTX
-    const pptx = new PptxGenJS();
-    pptx.layout = 'LAYOUT_WIDE';
-
-    for (const buffer of screenshotBuffers) {
-      const slide = pptx.addSlide();
-      slide.addImage({
-        data: `data:image/png;base64,${buffer.toString('base64')}`,
-        x: 0,
-        y: 0,
-        w: '100%',
-        h: '100%',
+      const imageBuffer = await page.screenshot({
+        type: 'png',
+        fullPage: false,
+        clip: { x: 0, y: 0, width: 960, height: 540 },
       });
+      slide.addImage({ data: imageBuffer.toString('base64'), x: 0, y: 0, w: '100%', h: '100%' });
     }
 
-    // 4. Send the PPTX file to the client
     const pptxBuffer = await pptx.write({ outputType: 'arraybuffer' });
 
-    return new NextResponse(Buffer.from(pptxBuffer as ArrayBuffer), {
-      status: 200,
+    // Explicitly convert ArrayBuffer to Buffer for NextResponse compatibility
+    const responseBuffer = Buffer.from(pptxBuffer as ArrayBuffer);
+
+    return new NextResponse(responseBuffer, {
       headers: {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-        'Content-Disposition': 'attachment; filename="converted.pptx"',
+        'Content-Disposition': 'attachment; filename="presentation.pptx"',
       },
+      status: 200,
     });
-
-  } catch (error: any) {
-    console.error("Error converting HTML to PPTX:", error);
-    return NextResponse.json({ error: error.message || "An unknown error occurred" }, { status: 500 });
+  } catch (error) {
+    console.error('Error converting HTML to PPTX:', error);
+    return NextResponse.json({ error: (error as Error).message }, { status: 500 });
+  } finally {
+    if (browser) {
+      await browser.close();
+    }
   }
 }

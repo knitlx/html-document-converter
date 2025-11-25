@@ -1,25 +1,35 @@
+// app/api/convert-html-to-pdf/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { Buffer } from 'buffer';
-// Explicitly import the types for the modules
-import type * as puppeteerCore from 'puppeteer-core';
-import type * as puppeteerFull from 'puppeteer';
-import type * as chromiumType from '@sparticuz/chromium';
 
-const IS_VERCEL = process.env.VERCEL_ENV === 'production' || process.env.VERCEL_ENV === 'preview';
+// Use direct imports for puppeteer-core and @sparticuz/chromium
+// These are production dependencies for Vercel
+import puppeteerCore from 'puppeteer-core';
+import chromium from '@sparticuz/chromium';
 
-let puppeteer: typeof puppeteerCore | typeof puppeteerFull;
-let chromium: typeof chromiumType | undefined;
+// Type definitions for process.env (optional but good practice)
+declare global {
+  namespace NodeJS {
+    interface ProcessEnv {
+      VERCEL_ENV: string | undefined;
+      NODE_ENV: string;
+    }
+  }
+}
 
-if (IS_VERCEL) {
-  // Dynamically require for Vercel
-  puppeteer = require('puppeteer-core') as typeof puppeteerCore;
-  chromium = require('@sparticuz/chromium') as typeof chromiumType;
-} else {
-  // Dynamically require for local development
-  puppeteer = require('puppeteer') as typeof puppeteerFull;
+// Conditional require for local development using the full puppeteer package
+let localPuppeteer: typeof puppeteerCore | undefined; // Use puppeteerCore type for consistency
+if (process.env.NODE_ENV === 'development' && !process.env.VERCEL_ENV) {
+  try {
+    // eslint-disable-next-line global-require
+    localPuppeteer = require('puppeteer');
+  } catch (error) {
+    console.warn('Full puppeteer not found locally, falling back to puppeteer-core.', error);
+  }
 }
 
 export async function POST(req: NextRequest) {
+  let browser: puppeteerCore.Browser | undefined; // Explicitly type browser
   try {
     const { htmlContent, options } = await req.json();
 
@@ -29,32 +39,47 @@ export async function POST(req: NextRequest) {
 
     console.log('Using direct binary buffer method. Received options:', options);
 
-    const browser = await puppeteer.launch(
-      IS_VERCEL
-        ? {
-            args: chromium!.args, // Use non-null assertion as chromium is defined if IS_VERCEL
-            defaultViewport: chromium!.defaultViewport,
-            executablePath: await chromium!.executablePath(),
-            headless: chromium!.headless,
-          }
-        : {
-            // Local development: puppeteer will find a local Chromium install
-            headless: true, // Use true for local headless, or false for visible browser
-          }
-    );
+    const isVercel = process.env.VERCEL_ENV === 'production' || process.env.VERCEL_ENV === 'preview';
+
+    if (isVercel) {
+      // For Vercel, use puppeteer-core with @sparticuz/chromium
+      browser = await puppeteerCore.launch({
+        args: [...chromium.args, '--hide-scrollbars', '--disable-web-security'],
+        defaultViewport: chromium.defaultViewport,
+        executablePath: await chromium.executablePath(
+          `https://github.com/Sparticuz/chromium/releases/download/v${chromium.revision}/chromium-v${chromium.revision}-pack.tar`
+        ),
+        headless: chromium.headless,
+      } as puppeteerCore.LaunchOptions); // Cast to LaunchOptions for type safety
+    } else if (localPuppeteer) {
+      // For local development, use the full puppeteer package (if found)
+      browser = await localPuppeteer.launch({
+        headless: true, // Use headless for local testing unless you need visual debugging
+        args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      });
+    } else {
+      // Fallback for local development if full puppeteer isn't available
+      // This case means puppeteer-core will try to find a local Chrome
+      console.warn('Neither Vercel environment nor full puppeteer found. Attempting to launch puppeteer-core locally.');
+      browser = await puppeteerCore.launch({
+        args: [...chromium.args, '--hide-scrollbars', '--disable-web-security'],
+        defaultViewport: chromium.defaultViewport,
+        executablePath: await chromium.executablePath(), // puppeteer-core tries to find local Chrome
+        headless: true,
+      } as puppeteerCore.LaunchOptions);
+    }
+
     const page = await browser.newPage();
 
     await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
 
-    const pdfOptions = {
+    const pdfOptions: puppeteerCore.PDFOptions = { // Explicitly type pdfOptions
       format: 'A4' as const,
       printBackground: true,
       margin: options?.margin,
     };
 
     const pdfBuffer = await page.pdf(pdfOptions);
-
-    await browser.close();
 
     if (!pdfBuffer) {
       throw new Error('PDF generation resulted in an empty buffer.');
@@ -75,5 +100,9 @@ export async function POST(req: NextRequest) {
     console.error('Error using direct buffer method:', error);
     const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
     return NextResponse.json({ error: `Failed to convert HTML to PDF: ${errorMessage}` }, { status: 500 });
+  } finally {
+    if (browser) {
+      await browser.close();
+    }
   }
 }
