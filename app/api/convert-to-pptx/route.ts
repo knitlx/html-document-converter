@@ -121,8 +121,7 @@ export async function POST(req: NextRequest) {
                 b, strong { font-weight: bold !important; }
                 i, em { font-style: italic !important; }
                 u { text-decoration: underline !important; }
-                ${originalStyles.join('
-')}
+                ${originalStyles.join('\n')}
             </style>
         </head>
         <body>
