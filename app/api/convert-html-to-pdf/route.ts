@@ -3,29 +3,6 @@ import { Buffer } from 'buffer';
 
 const IS_VERCEL = process.env.VERCEL_ENV === 'production' || process.env.VERCEL_ENV === 'preview';
 
-// Helper function to get the Puppeteer browser instance based on environment
-async function getBrowserInstance() {
-  let puppeteer: any;
-  let chromium: any;
-
-  if (IS_VERCEL) {
-    puppeteer = require('puppeteer-core');
-    chromium = require('@sparticuz/chromium');
-    return await puppeteer.launch({
-      args: chromium.args,
-      defaultViewport: chromium.defaultViewport,
-      executablePath: await chromium.executablePath(),
-      headless: chromium.headless,
-    });
-  } else {
-    // Use the full puppeteer package installed as a devDependency for local development
-    puppeteer = require('puppeteer');
-    return await puppeteer.launch({
-      headless: true, // Use true for local headless, or false for visible browser
-    });
-  }
-}
-
 export async function POST(req: NextRequest) {
   try {
     const { htmlContent, options } = await req.json();
@@ -34,9 +11,25 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'HTML content is required' }, { status: 400 });
     }
 
+    // Direct conditional assignment for puppeteer and chromium modules
+    const puppeteer: any = IS_VERCEL ? require('puppeteer-core') : require('puppeteer');
+    const chromium: any = IS_VERCEL ? require('@sparticuz/chromium') : undefined;
+
     console.log('Using direct binary buffer method. Received options:', options);
 
-    const browser = await getBrowserInstance();
+    const browser = await puppeteer.launch(
+      IS_VERCEL
+        ? {
+            args: chromium.args,
+            defaultViewport: chromium.defaultViewport,
+            executablePath: await chromium.executablePath(),
+            headless: chromium.headless,
+          }
+        : {
+            // Local development: puppeteer will find a local Chromium install
+            headless: true, // Use true for local headless, or false for visible browser
+          }
+    );
     const page = await browser.newPage();
 
     await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
