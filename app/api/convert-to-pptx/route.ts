@@ -1,8 +1,26 @@
 import { NextResponse } from "next/server";
 import { load } from "cheerio";
 import PptxGenJS from "pptxgenjs";
+import { Buffer } from 'buffer'; // Explicitly import Buffer
+
+// Explicitly import the types for the modules
+import type * as puppeteerCore from 'puppeteer-core';
+import type * as puppeteerFull from 'puppeteer';
+import type * as chromiumType from '@sparticuz/chromium';
 
 const IS_VERCEL = process.env.VERCEL_ENV === 'production' || process.env.VERCEL_ENV === 'preview';
+
+let puppeteer: typeof puppeteerCore | typeof puppeteerFull;
+let chromium: typeof chromiumType | undefined;
+
+if (IS_VERCEL) {
+  // Dynamically require for Vercel
+  puppeteer = require('puppeteer-core') as typeof puppeteerCore;
+  chromium = require('@sparticuz/chromium') as typeof chromiumType;
+} else {
+  // Dynamically require for local development
+  puppeteer = require('puppeteer') as typeof puppeteerFull;
+}
 
 export async function POST(request: Request) {
   try {
@@ -11,10 +29,6 @@ export async function POST(request: Request) {
     if (!htmlContent) {
       return NextResponse.json({ error: "HTML content is required" }, { status: 400 });
     }
-
-    // Direct conditional assignment for puppeteer and chromium modules
-    const puppeteer: any = IS_VERCEL ? require('puppeteer-core') : require('puppeteer');
-    const chromium: any = IS_VERCEL ? require('@sparticuz/chromium') : undefined;
 
     // 1. Load HTML and extract slides and styles
     const $ = load(htmlContent);
@@ -29,14 +43,14 @@ export async function POST(request: Request) {
     const browser = await puppeteer.launch(
       IS_VERCEL
         ? {
-            args: chromium.args,
-            defaultViewport: chromium.defaultViewport,
-            executablePath: await chromium.executablePath(),
-            headless: chromium.headless,
+            args: chromium!.args, // Use non-null assertion as chromium is defined if IS_VERCEL
+            defaultViewport: chromium!.defaultViewport,
+            executablePath: await chromium!.executablePath(),
+            headless: chromium!.headless,
           }
         : {
             // Local development: puppeteer will find a local Chromium install
-            headless: true, // Use true for local headless, or false for visible browser
+            headless: true, // Use true for local headless, or false for visual debugging
           }
     );
     const page = await browser.newPage();
