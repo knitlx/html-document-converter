@@ -4,8 +4,8 @@ import PptxGenJS from "pptxgenjs";
 
 const IS_VERCEL = process.env.VERCEL_ENV === 'production' || process.env.VERCEL_ENV === 'preview';
 
-let puppeteer;
-let chromium;
+let puppeteer: any;
+let chromium: any;
 
 if (IS_VERCEL) {
   puppeteer = require('puppeteer-core');
