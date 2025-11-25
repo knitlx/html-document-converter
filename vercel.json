@@ -1,0 +1,10 @@
+{
+  "functions": {
+    "pages/api/**/*.ts": {
+      "includeFiles": "node_modules/@sparticuz/chromium/**/*"
+    },
+    "app/api/**/*.ts": {
+      "includeFiles": "node_modules/@sparticuz/chromium/**/*"
+    }
+  }
+}
