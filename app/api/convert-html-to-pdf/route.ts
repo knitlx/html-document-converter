@@ -1,7 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
-import puppeteer from 'puppeteer-core';
-import chromium from '@sparticuz/chromium';
 import { Buffer } from 'buffer';
+
+const IS_VERCEL = process.env.VERCEL_ENV === 'production' || process.env.VERCEL_ENV === 'preview';
+
+let puppeteer;
+let chromium;
+
+if (IS_VERCEL) {
+  puppeteer = require('puppeteer-core');
+  chromium = require('@sparticuz/chromium');
+} else {
+  // Use the full puppeteer package installed as a devDependency for local development
+  puppeteer = require('puppeteer');
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -13,12 +24,19 @@ export async function POST(req: NextRequest) {
 
     console.log('Using direct binary buffer method. Received options:', options);
 
-    const browser = await puppeteer.launch({
-      args: chromium.args,
-      defaultViewport: chromium.defaultViewport,
-      executablePath: await chromium.executablePath(),
-      headless: chromium.headless,
-    });
+    const browser = await puppeteer.launch(
+      IS_VERCEL
+        ? {
+            args: chromium.args,
+            defaultViewport: chromium.defaultViewport,
+            executablePath: await chromium.executablePath(),
+            headless: chromium.headless,
+          }
+        : {
+            // Local development: puppeteer will find a local Chromium install
+            headless: true, // Use true for local headless, or false for visible browser
+          }
+    );
     const page = await browser.newPage();
 
     await page.setContent(htmlContent, { waitUntil: 'networkidle0' });

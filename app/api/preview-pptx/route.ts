@@ -1,7 +1,18 @@
 import { NextResponse } from 'next/server';
-import puppeteer from 'puppeteer-core';
-import chromium from '@sparticuz/chromium';
 import { load } from 'cheerio'; // Import cheerio
+
+const IS_VERCEL = process.env.VERCEL_ENV === 'production' || process.env.VERCEL_ENV === 'preview';
+
+let puppeteer;
+let chromium;
+
+if (IS_VERCEL) {
+  puppeteer = require('puppeteer-core');
+  chromium = require('@sparticuz/chromium');
+} else {
+  // Use the full puppeteer package installed as a devDependency for local development
+  puppeteer = require('puppeteer');
+}
 
 export async function POST(request: Request) {
   try {
@@ -25,12 +36,19 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'No slides found. Make sure to wrap your slides in <div class="slide">.' }, { status: 400 });
     }
 
-    const browser = await puppeteer.launch({
-      args: chromium.args,
-      defaultViewport: chromium.defaultViewport,
-      executablePath: await chromium.executablePath(),
-      headless: chromium.headless,
-    });
+    const browser = await puppeteer.launch(
+      IS_VERCEL
+        ? {
+            args: chromium.args,
+            defaultViewport: chromium.defaultViewport,
+            executablePath: await chromium.executablePath(),
+            headless: chromium.headless,
+          }
+        : {
+            // Local development: puppeteer will find a local Chromium install
+            headless: true, // Use true for local headless, or false for visible browser
+          }
+    );
     const page = await browser.newPage();
     
     // Set a viewport that matches standard presentation dimensions (16:9)
