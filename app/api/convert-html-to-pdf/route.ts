@@ -36,8 +36,8 @@ export async function POST(req: NextRequest) {
     
     console.log(`Successfully generated PDF buffer. Length: ${pdfBuffer.length}`);
 
-    // Return the raw PDF buffer directly
-    return new NextResponse(pdfBuffer, {
+    // Return the raw PDF buffer directly, ensuring it's a Buffer type for NextResponse
+    return new NextResponse(Buffer.from(pdfBuffer), {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',
