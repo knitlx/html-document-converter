@@ -63,9 +63,9 @@ export async function POST(request: Request) {
       await page.setContent(tempHtml, { waitUntil: 'load' });
       await page.setViewport({ width: 960, height: 540, deviceScaleFactor: 2 }); 
 
-      // Screenshot the entire viewport, which is staged by the #wrapper
+      // Screenshot the entire viewport, which is staged by the #wrapper, and ensure it's a Buffer
       const screenshot = await page.screenshot();
-      screenshotBuffers.push(screenshot);
+      screenshotBuffers.push(Buffer.from(screenshot));
     }
     await browser.close();
 
