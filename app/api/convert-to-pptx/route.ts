@@ -21,7 +21,7 @@ export async function POST(request: Request) {
     const styleTags = $('head').html();
                                                                                 
     // 2. Take screenshots of each slide                                        
-    const browser = await puppeteer.launch({ headless: true });                 
+    const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] });                 
     const page = await browser.newPage();                                       
     const screenshotBuffers: Uint8Array[] = [];                                     
                                                                                 
@@ -88,7 +88,7 @@ export async function POST(request: Request) {
     // 4. Send the PPTX file to the client                                      
     const pptxBuffer = await pptx.write({ outputType: 'arraybuffer' }) as ArrayBuffer;                         
 
-    return new NextResponse(pptxBuffer, {
+    return new NextResponse(new Uint8Array(pptxBuffer), {
       status: 200,
       headers: {
         "Content-Type": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
