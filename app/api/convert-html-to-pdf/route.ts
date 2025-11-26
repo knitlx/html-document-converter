@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-let puppeteer: any;
-let chromium: any;
+import puppeteer from 'puppeteer'; // Always use full puppeteer
 
 interface ConversionOptions {
   margin?: {
@@ -24,23 +22,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const isVercel =
-      process.env.VERCEL_ENV === 'production' ||
-      process.env.VERCEL_ENV === 'preview';
-
-    if (isVercel) {
-      puppeteer = require('puppeteer-core');
-      chromium = require('@sparticuz/chromium-min');
-    } else {
-      puppeteer = require('puppeteer');
-    }
-
     const browser = await puppeteer.launch({
-      args: isVercel ? [...chromium.args] : [],
-      defaultViewport: chromium.defaultViewport,
-      executablePath: isVercel ? await chromium.executablePath() : undefined,
-      headless: true,
-      ignoreHTTPSErrors: true
+      headless: true, // Always headless for server-side operations
+      args: ['--no-sandbox', '--disable-setuid-sandbox'], // Recommended args for robustness
     });
 
     const page = await browser.newPage();
@@ -67,7 +51,7 @@ export async function POST(req: NextRequest) {
 
     await browser.close();
 
-    return new NextResponse(pdfBuffer, {
+    return new NextResponse(new Uint8Array(pdfBuffer), {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',

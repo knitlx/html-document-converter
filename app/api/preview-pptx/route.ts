@@ -1,82 +1,88 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { load } from 'cheerio';
+import { NextResponse } from 'next/server';
+import puppeteer from 'puppeteer';
+import { load } from 'cheerio'; // Import cheerio
 
-let puppeteer: any;
-let chromium: any;
-
-export async function POST(req: NextRequest) {
+export async function POST(request: Request) {
   try {
-    const { htmlContent } = await req.json();
+    const { htmlContent } = await request.json();
+
     if (!htmlContent) {
       return NextResponse.json({ error: 'HTML content is required' }, { status: 400 });
     }
 
-    const isVercel =
-      process.env.VERCEL_ENV === 'production' ||
-      process.env.VERCEL_ENV === 'preview';
+    // 1. Load HTML and extract slides and styles using cheerio
+    const $ = load(htmlContent);
+    const slidesHtml: string[] = [];
+    $('div.slide').each((i, slide) => {
+      slidesHtml.push($.html(slide));
+    });
 
-    if (isVercel) {
-      puppeteer = require('puppeteer-core');
-      chromium = require('@sparticuz/chromium-min');
-    } else {
-      puppeteer = require('puppeteer');
+    // Extract original style tags from the head
+    const styleTags = $('head').html();
+
+    if (slidesHtml.length === 0) {
+        return NextResponse.json({ error: 'No slides found. Make sure to wrap your slides in <div class="slide">.' }, { status: 400 });
     }
 
-    const browser = await puppeteer.launch({
-      args: isVercel ? [...chromium.args] : [],
-      defaultViewport: chromium.defaultViewport,
-      executablePath: isVercel ? await chromium.executablePath() : undefined,
-      headless: true,
-    });
-
+    const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
     const page = await browser.newPage();
+
+    // Set a viewport that matches standard presentation dimensions (16:9)
     await page.setViewport({ width: 960, height: 540, deviceScaleFactor: 2 });
-
-    const $ = load(htmlContent);
-
-    const slides: string[] = [];
-    $('div.slide').each((_, el) => slides.push($.html(el) || ''));
-    if (slides.length === 0) slides.push(htmlContent);
-
-    const cssText: string[] = [];
-    $('style').each((_, el) => cssText.push($(el).text() || ''));
-
-    const linkTags: string[] = [];
-    $('link[rel="stylesheet"]').each((_, el) => {
-      const href = $(el).attr('href');
-      if (href) linkTags.push(`<link rel="stylesheet" href="${href}">`);
-    });
 
     const images: string[] = [];
 
-    for (const slide of slides) {
-      const html = `
+    for (let i = 0; i < slidesHtml.length; i++) {
+      const slideHtml = slidesHtml[i];
+
+      // Construct temporary HTML for each slide, including original styles and a wrapper
+      const tempHtml = `
         <!DOCTYPE html>
-        <html>
+        <html lang="en">
           <head>
-            ${linkTags.join('\n')}
-            <style>${cssText.join('\n')}</style>
+            ${styleTags}
+            <style>
+              body { margin: 0; padding: 0; }
+              #wrapper {
+                width: 960px;
+                height: 540px;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                /* padding: 25px; <<< REMOVED */
+                box-sizing: border-box;
+                overflow: hidden;
+              }
+              .slide {
+                opacity: 1 !important;
+                display: flex !important;
+                position: relative !important;
+                max-width: 100%;
+                max-height: 100%;
+              }
+            </style>
           </head>
           <body>
-            <div style="width:960px;height:540px">${slide}</div>
+            <div id="wrapper">
+              ${slideHtml}
+            </div>
           </body>
         </html>
       `;
 
-      await page.setContent(html, { waitUntil: 'networkidle0' });
+      await page.setContent(tempHtml, { waitUntil: 'load' });
+      await new Promise(r => setTimeout(r, 100)); // Give client-side scripts/styles time to apply
 
-      const buf = await page.screenshot({ type: 'png' });
-      images.push(`data:image/png;base64,${buf.toString('base64')}`);
+      const screenshotBuffer = await page.screenshot({ type: 'png' });
+      images.push(`data:image/png;base64,${screenshotBuffer.toString('base64')}`);
     }
 
     await browser.close();
 
-    return NextResponse.json({
-      images,
-      slideCount: images.length,
-    });
-  } catch (e) {
-    console.error(e);
-    return NextResponse.json({ error: 'Preview failed' }, { status: 500 });
+    return NextResponse.json({ images });
+
+  } catch (error: any) {
+    console.error('Error generating PPTX preview:', error);
+    return NextResponse.json({ error: `Failed to generate preview: ${error.message}` }, { status: 500 });
   }
 }
