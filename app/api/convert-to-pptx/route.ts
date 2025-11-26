@@ -77,7 +77,7 @@ export async function POST(request: Request) {
     for (const buffer of screenshotBuffers) {
       const slide = pptx.addSlide();
       slide.addImage({
-        data: `data:image/png;base64,${buffer.toString('base64')}`,
+        data: `data:image/png;base64,${Buffer.from(buffer).toString('base64')}`,
         x: 0,
         y: 0,
         w: '100%',
