@@ -23,7 +23,7 @@ export async function POST(request: Request) {
     // 2. Take screenshots of each slide                                        
     const browser = await puppeteer.launch({ headless: true });                 
     const page = await browser.newPage();                                       
-    const screenshotBuffers: Buffer[] = [];                                     
+    const screenshotBuffers: Uint8Array[] = [];                                     
                                                                                 
     for (const slideHtml of slidesHtml) {
       const tempHtml = `
