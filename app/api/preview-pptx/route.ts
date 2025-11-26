@@ -1,36 +1,21 @@
 import { NextResponse } from 'next/server';
+import puppeteer from 'puppeteer'; // Use full puppeteer package
 import { load } from 'cheerio'; // Import cheerio
 
-// Declare global ProcessEnv for TypeScript to recognize VERCEL_ENV
-declare global {
-  namespace NodeJS {
-    interface ProcessEnv {
-      VERCEL_ENV: string | undefined;
-    }
-  }
-}
-
 export async function POST(request: Request) {
-  let puppeteerModule: any;
-  let chromiumModule: any;
-
-  const isRender = process.env.VERCEL_ENV === 'production' || process.env.VERCEL_ENV === 'preview' || process.env.RENDER === 'true';
-
-  if (isRender) {
-    puppeteerModule = require('puppeteer-core');
-    chromiumModule = require('@sparticuz/chromium');
-  } else {
-    // Local development
-    puppeteerModule = require('puppeteer');
-    chromiumModule = {}; // Dummy object for local dev, properties won't be accessed
-  }
-
   try {
     const { htmlContent } = await request.json();
 
     if (!htmlContent) {
       return NextResponse.json({ error: 'HTML content is required' }, { status: 400 });
     }
+
+    const browser = await puppeteer.launch({
+      headless: true, // Always headless for server-side operations
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'], // Recommended args for robustness on Linux servers
+    });
+
+    const page = await browser.newPage();
 
     // 1. Load HTML and extract slides and styles using cheerio
     const $ = load(htmlContent);
@@ -46,26 +31,6 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'No slides found. Make sure to wrap your slides in <div class="slide">.' }, { status: 400 });
     }
 
-    const launchOptions: any = { // Use 'any' for launchOptions to handle dynamic properties
-      headless: true, // Consistent: true works everywhere
-      ignoreHTTPSErrors: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'], // Recommended args for robustness
-    };
-
-    if (isRender) {
-      launchOptions.args = [...chromiumModule.args, '--hide-scrollbars', '--disable-web-security'];
-      launchOptions.defaultViewport = chromiumModule.defaultViewport;
-      launchOptions.executablePath = await chromiumModule.executablePath();
-    } else {
-      // For local development, puppeteer finds its own executablePath.
-      // Use puppeteer's default viewport.
-      // No specific executablePath is set, puppeteer will auto-detect.
-    }
-
-    const browser = await puppeteerModule.launch(launchOptions);
-    const page = await browser.newPage();
-
-    // Set a viewport that matches standard presentation dimensions (16:9)
     await page.setViewport({ width: 960, height: 540, deviceScaleFactor: 2 });
 
     const images: string[] = [];
