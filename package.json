@@ -2,6 +2,9 @@
   "name": "html-document-converter",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -9,14 +12,14 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "@sparticuz/chromium": "^123.0.1",
+    "@sparticuz/chromium-min": "^138.0.2",
     "@tailwindcss/typography": "^0.5.19",
     "@types/cheerio": "^0.22.35",
     "cheerio": "^1.1.2",
     "next": "16.0.3",
     "pdf-lib": "^1.17.1",
     "pptxgenjs": "^4.0.1",
-    "puppeteer-core": "^22.12.1",
+    "puppeteer-core": "^24.31.0",
     "react": "19.2.0",
     "react-dom": "19.2.0"
   },
@@ -27,7 +30,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.0.3",
-    "puppeteer": "^22.12.1",
+    "puppeteer": "^24.31.0",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
