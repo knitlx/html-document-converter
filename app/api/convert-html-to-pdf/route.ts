@@ -3,12 +3,25 @@ import { NextRequest, NextResponse } from 'next/server';
 let puppeteer: any;
 let chromium: any;
 
+interface ConversionOptions {
+  margin?: {
+    top?: string;
+    bottom?: string;
+    left?: string;
+    right?: string;
+  };
+}
+
 export async function POST(req: NextRequest) {
   try {
-    const { htmlContent, options } = await req.json();
+    const { htmlContent, options }: { htmlContent: string; options?: ConversionOptions } =
+      await req.json();
 
     if (!htmlContent) {
-      return NextResponse.json({ error: 'HTML content is required' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'HTML content is required' },
+        { status: 400 }
+      );
     }
 
     const isVercel =
@@ -27,14 +40,21 @@ export async function POST(req: NextRequest) {
       defaultViewport: chromium.defaultViewport,
       executablePath: isVercel ? await chromium.executablePath() : undefined,
       headless: true,
+      ignoreHTTPSErrors: true
     });
 
     const page = await browser.newPage();
-    await page.setViewport({ width: 794, height: 1123 });
+
+    // A4 (794x1123) — корректный CSS пиксельный размер под PDF
+    await page.setViewport({
+      width: 794,
+      height: 1123,
+      deviceScaleFactor: 1,
+    });
 
     await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
 
-    const pdf = await page.pdf({
+    const pdfBuffer = await page.pdf({
       format: 'A4',
       printBackground: true,
       margin: options?.margin ?? {
@@ -47,14 +67,19 @@ export async function POST(req: NextRequest) {
 
     await browser.close();
 
-    return new NextResponse(pdf, {
+    return new NextResponse(pdfBuffer, {
+      status: 200,
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': 'attachment; filename=converted.pdf',
+        'Content-Length': pdfBuffer.length.toString(),
       },
     });
   } catch (e) {
-    console.error(e);
-    return NextResponse.json({ error: 'PDF conversion failed' }, { status: 500 });
+    console.error('PDF conversion error:', e);
+    return NextResponse.json(
+      { error: 'PDF conversion failed' },
+      { status: 500 }
+    );
   }
 }
