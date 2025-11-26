@@ -12,14 +12,14 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "@sparticuz/chromium-min": "^138.0.2",
+    "@sparticuz/chromium": "^119.0.0",
     "@tailwindcss/typography": "^0.5.19",
     "@types/cheerio": "^0.22.35",
     "cheerio": "^1.1.2",
     "next": "16.0.3",
     "pdf-lib": "^1.17.1",
     "pptxgenjs": "^4.0.1",
-    "puppeteer-core": "^24.31.0",
+    "puppeteer-core": "^21.0.0",
     "react": "19.2.0",
     "react-dom": "19.2.0"
   },

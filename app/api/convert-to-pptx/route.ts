@@ -19,7 +19,7 @@ export async function POST(request: Request) {
 
   if (isRender) {
     puppeteerModule = require('puppeteer-core');
-    chromiumModule = require('@sparticuz/chromium-min');
+    chromiumModule = require('@sparticuz/chromium');
   } else {
     // Local development
     puppeteerModule = require('puppeteer');
@@ -45,11 +45,12 @@ export async function POST(request: Request) {
     // 2. Take screenshots of each slide                                        
     const launchOptions: any = { // Use 'any' for launchOptions to handle dynamic properties
       headless: true, // Consistent: true works everywhere
+      ignoreHTTPSErrors: true,
       args: ['--no-sandbox', '--disable-setuid-sandbox'], // Recommended args for robustness
     };
 
     if (isRender) {
-      launchOptions.args = [...chromiumModule.args, '--hide-scrollbars', '--disable-web-security'];
+      launchOptions.args = [...chromiumModule.args, "--hide-scrollbars", "--disable-web-security"];
       launchOptions.defaultViewport = chromiumModule.defaultViewport;
       launchOptions.executablePath = await chromiumModule.executablePath();
     } else {

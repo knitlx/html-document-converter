@@ -18,21 +18,21 @@ interface ConversionOptions {
   };
 }
 
+let puppeteerModule: any;
+let chromiumModule: any;
+
+// Use conditional import for Puppeteer to avoid bundling full Puppeteer in Render/serverless
+if (process.env.VERCEL_ENV === 'production' || process.env.RENDER === 'true') { // VERCEL_ENV is often used as a general serverless flag
+  puppeteerModule = require('puppeteer-core');
+  chromiumModule = require('@sparticuz/chromium');
+} else {
+  // Local development
+  puppeteerModule = require('puppeteer');
+  chromiumModule = {}; // Dummy object for local dev, properties won't be accessed
+}
+
+
 export async function POST(req: NextRequest) {
-  let puppeteerModule: any;
-  let chromiumModule: any;
-
-  const isRender = process.env.VERCEL_ENV === 'production' || process.env.VERCEL_ENV === 'preview' || process.env.RENDER === 'true'; // VERCEL_ENV is a general serverless flag, RENDER is specific
-
-  if (isRender) {
-    puppeteerModule = require('puppeteer-core');
-    chromiumModule = require('@sparticuz/chromium-min');
-  } else {
-    // Local development
-    puppeteerModule = require('puppeteer');
-    chromiumModule = {}; // Dummy object for local dev, properties won't be accessed
-  }
-
   try {
     const { htmlContent, options }: { htmlContent: string; options?: ConversionOptions } =
       await req.json();
@@ -50,8 +50,8 @@ export async function POST(req: NextRequest) {
       args: ['--no-sandbox', '--disable-setuid-sandbox'], // Recommended args for robustness
     };
 
-    if (isRender) {
-      launchOptions.args = [...chromiumModule.args, '--hide-scrollbars', '--disable-web-security'];
+    if (process.env.VERCEL_ENV === 'production' || process.env.RENDER === 'true') {
+      launchOptions.args = [...chromiumModule.args, "--hide-scrollbars", "--disable-web-security"];
       launchOptions.defaultViewport = chromiumModule.defaultViewport;
       launchOptions.executablePath = await chromiumModule.executablePath();
     } else {
@@ -88,7 +88,7 @@ export async function POST(req: NextRequest) {
     return new NextResponse(new Uint8Array(pdfBuffer), {
       status: 200,
       headers: {
-        'Content-Type': 'application/pdf', // This should be application/pdf as we're sending Uint8Array
+        'Content-Type': 'application/pdf',
         'Content-Disposition': 'attachment; filename=converted.pdf',
         'Content-Length': pdfBuffer.length.toString(),
       },

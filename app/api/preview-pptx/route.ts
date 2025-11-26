@@ -18,7 +18,7 @@ export async function POST(request: Request) {
 
   if (isRender) {
     puppeteerModule = require('puppeteer-core');
-    chromiumModule = require('@sparticuz/chromium-min');
+    chromiumModule = require('@sparticuz/chromium');
   } else {
     // Local development
     puppeteerModule = require('puppeteer');
@@ -48,6 +48,7 @@ export async function POST(request: Request) {
 
     const launchOptions: any = { // Use 'any' for launchOptions to handle dynamic properties
       headless: true, // Consistent: true works everywhere
+      ignoreHTTPSErrors: true,
       args: ['--no-sandbox', '--disable-setuid-sandbox'], // Recommended args for robustness
     };
 
