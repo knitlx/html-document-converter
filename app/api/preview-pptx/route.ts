@@ -74,7 +74,7 @@ export async function POST(request: Request) {
       await new Promise(r => setTimeout(r, 100)); // Give client-side scripts/styles time to apply
 
       const screenshotBuffer = await page.screenshot({ type: 'png' });
-      images.push(`data:image/png;base64,${screenshotBuffer.toString('base64')}`);
+      images.push(`data:image/png;base64,${Buffer.from(screenshotBuffer).toString('base64')}`);
     }
 
     await browser.close();
