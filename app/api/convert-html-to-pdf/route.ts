@@ -25,6 +25,7 @@ export async function POST(req: NextRequest) {
     const browser = await puppeteer.launch({
       headless: true, // Always headless for server-side operations
       args: ['--no-sandbox', '--disable-setuid-sandbox'], // Recommended args for robustness
+      executablePath: '/usr/bin/chromium',
     });
 
     const page = await browser.newPage();

@@ -21,7 +21,7 @@ export async function POST(request: Request) {
     const styleTags = $('head').html();
                                                                                 
     // 2. Take screenshots of each slide                                        
-    const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] });                 
+    const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'], executablePath: '/usr/bin/chromium' });                 
     const page = await browser.newPage();                                       
     const screenshotBuffers: Uint8Array[] = [];                                     
                                                                                 
