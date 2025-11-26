@@ -1,9 +1,31 @@
 import { NextResponse } from "next/server";
-import puppeteer from "puppeteer";
 import { load } from "cheerio";
 import PptxGenJS from "pptxgenjs";
 
+// Declare global ProcessEnv for TypeScript to recognize VERCEL_ENV
+declare global {
+  namespace NodeJS {
+    interface ProcessEnv {
+      VERCEL_ENV: string | undefined;
+    }
+  }
+}
+
 export async function POST(request: Request) {
+  let puppeteerModule: any;
+  let chromiumModule: any;
+
+  const isRender = process.env.VERCEL_ENV === 'production' || process.env.VERCEL_ENV === 'preview' || process.env.RENDER === 'true';
+
+  if (isRender) {
+    puppeteerModule = require('puppeteer-core');
+    chromiumModule = require('@sparticuz/chromium-min');
+  } else {
+    // Local development
+    puppeteerModule = require('puppeteer');
+    chromiumModule = {}; // Dummy object for local dev, properties won't be accessed
+  }
+
   try {
     const { htmlContent } = await request.json();
 
@@ -21,7 +43,22 @@ export async function POST(request: Request) {
     const styleTags = $('head').html();
                                                                                 
     // 2. Take screenshots of each slide                                        
-    const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'], executablePath: '/usr/bin/chromium' });                 
+    const launchOptions: any = { // Use 'any' for launchOptions to handle dynamic properties
+      headless: true, // Consistent: true works everywhere
+      args: ['--no-sandbox', '--disable-setuid-sandbox'], // Recommended args for robustness
+    };
+
+    if (isRender) {
+      launchOptions.args = [...chromiumModule.args, '--hide-scrollbars', '--disable-web-security'];
+      launchOptions.defaultViewport = chromiumModule.defaultViewport;
+      launchOptions.executablePath = await chromiumModule.executablePath();
+    } else {
+      // For local development, puppeteer finds its own executablePath.
+      // Use puppeteer's default viewport.
+      // No specific executablePath is set, puppeteer will auto-detect.
+    }
+
+    const browser = await puppeteerModule.launch(launchOptions);                 
     const page = await browser.newPage();                                       
     const screenshotBuffers: Uint8Array[] = [];                                     
                                                                                 
