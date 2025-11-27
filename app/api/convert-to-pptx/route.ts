@@ -21,7 +21,7 @@ export async function POST(request: Request) {
         '--no-zygote',
         '--single-process'
       ],
-      executablePath: process.env.CHROMIUM_EXECUTABLE_PATH || '/usr/bin/chromium'
+      ...(process.env.CHROMIUM_EXECUTABLE_PATH ? { executablePath: process.env.CHROMIUM_EXECUTABLE_PATH } : {}),
     });
 
     const page = await browser.newPage();

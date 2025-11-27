@@ -117,6 +117,30 @@ export default function Home() {
     document.body.appendChild(a); a.click(); a.remove();
   };
 
+  const handlePdfDownloadDirectly = async () => {
+    if (!htmlInput.trim()) return setError("Пожалуйста, введите HTML-код для конвертации.");
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/convert-html-to-pdf", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ htmlContent: htmlInput, options: { margin: {
+          top: `${margins.top}${marginUnit}`, right: `${margins.right}${marginUnit}`,
+          bottom: `${margins.bottom}${marginUnit}`, left: `${margins.left}${marginUnit}`,
+        }}}),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || "Ошибка сервера");
+      const blob = await res.blob();
+      if (blob.size === 0) throw new Error("Сервер вернул пустой PDF.");
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = "converted.pdf";
+      document.body.appendChild(a); a.click(); a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) { setError(err.message); } 
+    finally { setLoading(false); }
+  };
+
   const handleHtmlToPptxConvert = async () => {
     if (!htmlInput.trim()) return setError("Пожалуйста, введите HTML-код для конвертации.");
     setLoading(true);
@@ -210,11 +234,10 @@ export default function Home() {
               <section><h2 className="text-xl font-semibold text-gray-800 mb-3">Действия</h2>
                 <div className="flex items-center gap-4">
                   <ActionButton onClick={handlePdfPreview}><EyeIcon />Предпросмотр</ActionButton>
-                  {pdfPreviewUrl && (
-                    <button onClick={handlePdfDownload} disabled={loading} className="inline-flex items-center font-semibold text-gray-800 py-3 px-4 rounded-lg bg-gradient-to-b from-cyan-200 to-cyan-400 shadow-lg hover:shadow-xl hover:-translate-y-px transform transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-white/60 focus:ring-cyan-500">
-                      <DownloadIcon />
-                    </button>
-                  )}
+                  <ActionButton onClick={handlePdfDownloadDirectly} className="bg-gradient-to-b from-cyan-200 to-cyan-400">
+                      <DownloadIcon/>Скачать
+                  </ActionButton>
+
                 </div>
               </section>
             </div>
@@ -237,9 +260,10 @@ export default function Home() {
               <section><h2 className="text-xl font-semibold text-gray-800 mb-3">Действия</h2>
                 <div className="flex items-center gap-4">
                     <ActionButton onClick={handlePptxPreview}><EyeIcon />Предпросмотр</ActionButton>
-                    {pptxPreviewImages.length > 0 && ( // Conditional rendering for Convert button
-                      <ActionButton onClick={handleHtmlToPptxConvert} className="bg-gradient-to-b from-green-300 to-green-500"><DownloadIcon/>Конвертировать</ActionButton>
-                    )}
+                    <ActionButton onClick={handleHtmlToPptxConvert} className="bg-gradient-to-b from-cyan-200 to-cyan-400">
+                        <DownloadIcon/>Скачать
+                    </ActionButton>
+
                 </div>
               </section>
               <section><h2 className="text-xl font-semibold text-gray-800 mb-3">Инструкция</h2><PptxInstruction /></section>
