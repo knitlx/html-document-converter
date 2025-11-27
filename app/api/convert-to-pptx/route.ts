@@ -13,7 +13,15 @@ export async function POST(request: Request) {
 
     const browser = await puppeteer.launch({
       headless: true, // Always headless for server-side operations
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'], // Recommended args for robustness on Linux servers
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--no-zygote',
+        '--single-process'
+      ],
+      executablePath: process.env.CHROMIUM_EXECUTABLE_PATH || '/usr/bin/chromium'
     });
 
     const page = await browser.newPage();
