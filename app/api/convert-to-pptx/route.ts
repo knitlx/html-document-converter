@@ -108,8 +108,9 @@ export async function POST(request: Request) {
       },
     });
                                                                                 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error converting HTML to PPTX:", error);
-    return NextResponse.json({ error: error.message || "An unknown error occurred" }, { status: 500 });
+    const message = error instanceof Error ? error.message : "An unknown error occurred";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

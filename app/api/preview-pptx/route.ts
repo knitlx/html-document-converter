@@ -92,8 +92,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ images });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error generating PPTX preview:', error);
-    return NextResponse.json({ error: `Failed to generate preview: ${error.message}` }, { status: 500 });
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    return NextResponse.json({ error: `Failed to generate preview: ${message}` }, { status: 500 });
   }
 }

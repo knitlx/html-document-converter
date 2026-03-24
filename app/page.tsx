@@ -40,7 +40,7 @@ const PptxInstruction = () => (
   <div className="prose prose-sm max-w-none text-gray-600 bg-white/50 p-4 rounded-xl border-2 border-gray-300/60 shadow-sm">
     <h4 className="text-gray-800">Ожидаемый формат HTML для PPTX</h4>
     <p>
-      Конвертер ищет в коде блоки <code>&lt;div class="slide"&gt;</code>. Каждый такой блок будет преобразован в отдельный слайд-картинку в презентации.
+      Конвертер ищет в коде блоки <code>&lt;div class=&quot;slide&quot;&gt;</code>. Каждый такой блок будет преобразован в отдельный слайд-картинку в презентации.
     </p>
     <p>Все стили, необходимые для отображения слайдов, должны быть определены внутри тега <code>&lt;head&gt;</code> вашего HTML.</p>
     <pre><code className="text-xs">
@@ -65,9 +65,19 @@ const PptxInstruction = () => (
   </div>
 );
 
+const JpgInstruction = () => (
+  <div className="prose prose-sm max-w-none text-gray-600 bg-white/50 p-4 rounded-xl border-2 border-gray-300/60 shadow-sm">
+    <h4 className="text-gray-800">Ожидаемый формат HTML для JPG</h4>
+    <p>
+      Конвертер ищет в коде блоки <code>&lt;div class=&quot;slide&quot;&gt;</code>. Каждый такой блок будет сохранен как отдельный JPG-файл.
+    </p>
+    <p>Все стили, необходимые для отображения слайдов, должны быть определены внутри тега <code>&lt;head&gt;</code> вашего HTML.</p>
+  </div>
+);
+
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<'pdf' | 'pptx'>('pdf');
+  const [activeTab, setActiveTab] = useState<'pdf' | 'pptx' | 'jpg'>('pdf');
   const [htmlInput, setHtmlInput] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -80,6 +90,10 @@ export default function Home() {
   // PPTX specific state
   const [pptxPreviewImages, setPptxPreviewImages] = useState<string[]>([]);
   const [currentSlide, setCurrentSlide] = useState(0);
+
+  // JPG specific state
+  const [jpgPreviewImages, setJpgPreviewImages] = useState<string[]>([]);
+  const [currentJpgSlide, setCurrentJpgSlide] = useState(0);
 
 
   const handleHtmlInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => setHtmlInput(e.target.value);
@@ -106,15 +120,8 @@ export default function Home() {
       const blob = await res.blob();
       if (blob.size === 0) throw new Error("Сервер вернул пустой PDF.");
       setPdfPreviewUrl(URL.createObjectURL(blob) + '#navpanes=1&view=FitH');
-    } catch (err: any) { setError(err.message); } 
+    } catch (err: unknown) { setError(err instanceof Error ? err.message : "Ошибка сервера"); } 
     finally { setLoading(false); }
-  };
-  
-  const handlePdfDownload = () => {
-    if (!pdfPreviewUrl) return;
-    const a = document.createElement("a");
-    a.href = pdfPreviewUrl; a.download = "converted.pdf";
-    document.body.appendChild(a); a.click(); a.remove();
   };
 
   const handlePdfDownloadDirectly = async () => {
@@ -137,7 +144,7 @@ export default function Home() {
       a.href = url; a.download = "converted.pdf";
       document.body.appendChild(a); a.click(); a.remove();
       window.URL.revokeObjectURL(url);
-    } catch (err: any) { setError(err.message); } 
+    } catch (err: unknown) { setError(err instanceof Error ? err.message : "Ошибка сервера"); } 
     finally { setLoading(false); }
   };
 
@@ -157,7 +164,7 @@ export default function Home() {
       a.href = url; a.download = "converted.pptx";
       document.body.appendChild(a); a.click(); a.remove();
       window.URL.revokeObjectURL(url);
-    } catch (err: any) { setError(err.message); } 
+    } catch (err: unknown) { setError(err instanceof Error ? err.message : "Ошибка конвертации в PPTX."); } 
     finally { setLoading(false); }
   };
 
@@ -177,8 +184,106 @@ export default function Home() {
       if (!data.images || data.images.length === 0) throw new Error("Не найдено слайдов для предпросмотра.");
       setPptxPreviewImages(data.images);
       setCurrentSlide(0);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Ошибка генерации предпросмотра PPTX.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCurrentJpgDownload = async () => {
+    const downloadImage = (image: string, index: number) => {
+      const a = document.createElement("a");
+      a.href = image;
+      a.download = `slide-${index + 1}.jpg`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    };
+
+    if (jpgPreviewImages.length > 0) {
+      downloadImage(jpgPreviewImages[currentJpgSlide], currentJpgSlide);
+      return;
+    }
+
+    if (!htmlInput.trim()) {
+      setError("Пожалуйста, введите HTML-код для конвертации.");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const res = await fetch("/api/convert-to-jpg", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ htmlContent: htmlInput }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Ошибка конвертации в JPG.");
+      if (!data.images || data.images.length === 0) throw new Error("Не найдено слайдов для скачивания.");
+
+      setJpgPreviewImages(data.images);
+      setCurrentJpgSlide(0);
+      downloadImage(data.images[0], 0);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Ошибка конвертации в JPG.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleJpgPreview = async () => {
+    if (!htmlInput.trim()) return setError("Пожалуйста, введите HTML-код для конвертации.");
+    setLoading(true);
+    setError(null);
+    setJpgPreviewImages([]);
+    try {
+      const res = await fetch("/api/convert-to-jpg", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ htmlContent: htmlInput }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Ошибка генерации предпросмотра JPG.");
+      if (!data.images || data.images.length === 0) throw new Error("Не найдено слайдов для предпросмотра.");
+      setJpgPreviewImages(data.images);
+      setCurrentJpgSlide(0);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Ошибка генерации предпросмотра JPG.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleHtmlToJpgConvert = async () => {
+    if (!htmlInput.trim()) return setError("Пожалуйста, введите HTML-код для конвертации.");
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/convert-to-jpg", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ htmlContent: htmlInput }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Ошибка конвертации в JPG.");
+      if (!data.images || data.images.length === 0) throw new Error("Не найдено слайдов для скачивания.");
+
+      data.images.forEach((image: string, index: number) => {
+        const a = document.createElement("a");
+        a.href = image;
+        a.download = `slide-${index + 1}.jpg`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      });
+
+      setJpgPreviewImages(data.images);
+      setCurrentJpgSlide(0);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Ошибка конвертации в JPG.");
     } finally {
       setLoading(false);
     }
@@ -188,11 +293,12 @@ export default function Home() {
     return () => { if (pdfPreviewUrl) URL.revokeObjectURL(pdfPreviewUrl); };
   }, [pdfPreviewUrl]);
 
-  const TabButton = ({ tab, label }: { tab: 'pdf' | 'pptx', label: string }) => (
+  const TabButton = ({ tab, label }: { tab: 'pdf' | 'pptx' | 'jpg', label: string }) => (
     <button onClick={() => {
       setActiveTab(tab); 
       setError(null); 
       setPptxPreviewImages([]);
+      setJpgPreviewImages([]);
       if(pdfPreviewUrl) URL.revokeObjectURL(pdfPreviewUrl);
       setPdfPreviewUrl(null);
     }} className={`relative px-4 py-2 text-sm font-medium leading-5 rounded-md transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-white/60 focus:ring-cyan-500 ${
@@ -203,7 +309,7 @@ export default function Home() {
   );
 
   const ActionButton = ({ onClick, children, className = '' }: { onClick: () => void, children: React.ReactNode, className?: string }) => (
-    <button onClick={onClick} disabled={loading} className={`inline-flex items-center justify-center px-6 py-3 font-semibold text-gray-800 bg-gradient-to-b from-cyan-200 to-cyan-400 rounded-lg shadow-lg hover:shadow-xl hover:-translate-y-px transform transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-white/60 focus:ring-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed ${className}`}>
+    <button onClick={onClick} disabled={loading} className={`inline-flex items-center justify-center px-4 py-2.5 text-sm font-semibold whitespace-nowrap text-gray-800 bg-gradient-to-b from-cyan-200 to-cyan-400 rounded-lg shadow-lg hover:shadow-xl hover:-translate-y-px transform transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-white/60 focus:ring-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed ${className}`}>
       {loading ? "Обработка..." : children}
     </button>
   );
@@ -224,6 +330,7 @@ export default function Home() {
         <div className="flex space-x-2 border-b-2 border-gray-300/60 mb-8">
           <TabButton tab="pdf" label="PDF Конвертер" />
           <TabButton tab="pptx" label="PPTX Конвертер" />
+          <TabButton tab="jpg" label="HTML to JPG" />
         </div>
 
         {activeTab === 'pdf' && (
@@ -295,6 +402,56 @@ export default function Home() {
                   </div>
                 )}
                 {!loading && !error && pptxPreviewImages.length === 0 && <div className="text-gray-400">Здесь появится предпросмотр PPTX</div>}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'jpg' && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 sm:gap-12 w-full animate-fade-in">
+            <div className="flex flex-col gap-8">
+              <section><h2 className="text-xl font-semibold text-gray-800 mb-3">Вставьте HTML</h2><textarea className="w-full p-3 border-2 border-gray-300/60 rounded-lg bg-white/50 text-sm focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 outline-none transition-all duration-200 shadow-sm" rows={8} placeholder="Вставьте ваш HTML-код здесь..." value={htmlInput} onChange={handleHtmlInputChange} disabled={loading}></textarea></section>
+              <section><h2 className="text-xl font-semibold text-gray-800 mb-3">Действия</h2>
+                <div className="flex flex-wrap items-center gap-3">
+                    <ActionButton onClick={handleJpgPreview}><EyeIcon />Предпросмотр</ActionButton>
+                    <ActionButton onClick={handleCurrentJpgDownload} className="bg-gradient-to-b from-cyan-200 to-cyan-400">
+                        <DownloadIcon/>Скачать текущий
+                    </ActionButton>
+                    <ActionButton onClick={handleHtmlToJpgConvert} className="bg-gradient-to-b from-cyan-200 to-cyan-400">
+                        <DownloadIcon/>Скачать все
+                    </ActionButton>
+
+                </div>
+              </section>
+              <section><h2 className="text-xl font-semibold text-gray-800 mb-3">Инструкция</h2><JpgInstruction /></section>
+            </div>
+            <div className="flex flex-col gap-4 w-full">
+              <h2 className="text-xl font-semibold text-gray-800">Предпросмотр JPG</h2>
+              <div className="w-full min-h-[400px] lg:min-h-[540px] border-2 border-gray-300/60 rounded-xl flex items-center justify-center bg-gray-100/50 shadow-md overflow-hidden relative">
+                {loading && <div className="text-gray-500">Загрузка предпросмотра...</div>}
+                {error && jpgPreviewImages.length === 0 && <div className="text-red-500 text-sm px-4">{error}</div>}
+                {jpgPreviewImages.length > 0 && !error && (
+                  <div className="w-full h-full flex flex-col items-center justify-center relative">
+                    <img src={jpgPreviewImages[currentJpgSlide]} alt={`Slide ${currentJpgSlide + 1}`} className="max-w-full max-h-full object-contain"/>
+                    <div className="absolute top-2 right-2 flex items-center gap-2">
+                       <span className="text-sm font-semibold text-gray-700 bg-white/70 backdrop-blur-sm rounded-md px-2 py-1">{currentJpgSlide + 1} / {jpgPreviewImages.length}</span>
+                       <button onClick={() => setJpgPreviewImages([])} className="p-1.5 rounded-md bg-gray-600/50 hover:bg-gray-800/70 text-white transition-colors">
+                          <CloseIcon/>
+                       </button>
+                    </div>
+                     {currentJpgSlide > 0 && (
+                      <button onClick={() => setCurrentJpgSlide(s => s - 1)} className="absolute left-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/30 hover:bg-black/50 text-white transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+                      </button>
+                    )}
+                    {currentJpgSlide < jpgPreviewImages.length - 1 && (
+                      <button onClick={() => setCurrentJpgSlide(s => s + 1)} className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/30 hover:bg-black/50 text-white transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                      </button>
+                    )}
+                  </div>
+                )}
+                {!loading && !error && jpgPreviewImages.length === 0 && <div className="text-gray-400">Здесь появится предпросмотр JPG</div>}
               </div>
             </div>
           </div>
