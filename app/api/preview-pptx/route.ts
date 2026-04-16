@@ -76,7 +76,7 @@ export async function POST(request: Request) {
             if (nthIndex === slideIndex) {
               modifiedSlideHtml = modifiedSlideHtml.replace(
                 /<div class="slide">/,
-                `<div class="slide" style="background: url('${backgroundUrl}') center/cover no-repeat;"`
+                `<div class="slide" style="background: url('${backgroundUrl}') center/cover no-repeat;">`
               );
             }
           }
