@@ -130,11 +130,12 @@ describe('Конвертеры - Background Images', () => {
     if (nthIndex === slideIndex) {
       slideHtml = slideHtml.replace(
         /<div class="slide">/,
-        `<div class="slide" style="background: url('${backgroundUrl}') center/cover no-repeat;"`
+        `<div class="slide" style="background: url('${backgroundUrl}') center/cover no-repeat;">`
       );
     }
     
     expect(slideHtml).toContain('style="background: url(\'/path/to/image.png\') center/cover no-repeat;"');
+    expect(slideHtml).toMatch(/<div class="slide" style="[^"]*">/)
   });
 
   test('Применение inline стиля для класс селектора', () => {
