@@ -27,13 +27,31 @@ export async function POST(request: Request) {
 
     // 1. Load HTML and extract slides and styles using cheerio
     const $ = load(htmlContent);
-    const slidesHtml: string[] = [];
-    $('div.slide').each((i, slide) => {
-      slidesHtml.push($.html(slide));
-    });
+    const slideElements = $('div.slide').toArray();
+    const slidesHtml: string[] = slideElements.map(slide => $.html(slide));
 
     // Extract original style tags from the head
     const styleTags = $('head').html();
+    
+    // Parse CSS to extract all background url() from all selectors
+    const cssRules = styleTags || '';
+    
+    // Extract all CSS rules with background url()
+    const cssRuleRegex = /([^{]+)\{([^}]*)\}/g;
+    const backgroundMap: Record<string, string> = {};
+    
+    let match;
+    while ((match = cssRuleRegex.exec(cssRules)) !== null) {
+      const selector = match[1].trim();
+      const styles = match[2];
+      const backgroundMatch = styles.match(/background:\s*url\(['"]([^'"]+)['"]\)/);
+      if (backgroundMatch) {
+        backgroundMap[selector] = backgroundMatch[1];
+      }
+    }
+    
+    // Remove all background url() rules from CSS to avoid conflicts
+    const cleanedCss = cssRules.replace(/background:\s*url\(['"][^'"]+['"]\)/g, 'background: none');
 
     if (slidesHtml.length === 0) {
         return NextResponse.json({ error: 'No slides found. Make sure to wrap your slides in <div class="slide">.' }, { status: 400 });
@@ -44,14 +62,54 @@ export async function POST(request: Request) {
     const images: string[] = [];
 
     for (let i = 0; i < slidesHtml.length; i++) {
-      const slideHtml = slidesHtml[i];
-
+      const slideIndex = i + 1;
+      
+      let modifiedSlideHtml = slidesHtml[i];
+      
+      // Apply backgrounds inline based on selectors
+      for (const [selector, backgroundUrl] of Object.entries(backgroundMap)) {
+        // Handle nth-child selectors (including combined selectors like .slides-track .slide:nth-child(1))
+        if (selector.includes(':nth-child')) {
+          const nthMatch = selector.match(/:nth-child\((\d+)\)/);
+          if (nthMatch) {
+            const nthIndex = parseInt(nthMatch[1]);
+            if (nthIndex === slideIndex) {
+              modifiedSlideHtml = modifiedSlideHtml.replace(
+                /<div class="slide">/,
+                `<div class="slide" style="background: url('${backgroundUrl}') center/cover no-repeat;"`
+              );
+            }
+          }
+        }
+        // Handle class selectors
+        else if (selector.startsWith('.')) {
+          const className = selector.substring(1);
+          modifiedSlideHtml = modifiedSlideHtml.replace(
+            new RegExp(`class="[^"]*\\b${className}\\b[^"]*"`, 'g'),
+            (match) => {
+              if (!match.includes('style=')) {
+                return match.replace('class="', `style="background: url('${backgroundUrl}') center/cover no-repeat;" class="`);
+              }
+              return match;
+            }
+          );
+        }
+        // Handle ID selectors
+        else if (selector.startsWith('#')) {
+          const idName = selector.substring(1);
+          modifiedSlideHtml = modifiedSlideHtml.replace(
+            new RegExp(`id="${idName}"`, 'g'),
+            `id="${idName}" style="background: url('${backgroundUrl}') center/cover no-repeat;"`
+          );
+        }
+      }
+      
       // Construct temporary HTML for each slide, including original styles and a wrapper
       const tempHtml = `
         <!DOCTYPE html>
         <html lang="en">
           <head>
-            ${styleTags}
+            <style>${cleanedCss}</style>
             <style>
               body { margin: 0; padding: 0; }
               #wrapper {
@@ -75,7 +133,7 @@ export async function POST(request: Request) {
           </head>
           <body>
             <div id="wrapper">
-              ${slideHtml}
+              ${modifiedSlideHtml}
             </div>
           </body>
         </html>

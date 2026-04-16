@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Image from "next/image";
 
 // --- Helper: Icon Components ---
 const DownloadIcon = () => (
@@ -81,6 +82,13 @@ export default function Home() {
   const [htmlInput, setHtmlInput] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [uploadedImages, setUploadedImages] = useState<Map<string, { base64: string; originalName: string }>>(new Map()); // filename -> {base64, originalName}
+  const [imageMappings, setImageMappings] = useState<Map<string, string>>(new Map()); // htmlPath -> uploadedFilename
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
   
   // PDF specific state
   const [margins, setMargins] = useState({ top: "0", right: "0", bottom: "0", left: "0" });
@@ -100,6 +108,174 @@ export default function Home() {
   const handleMarginChange = (e: React.ChangeEvent<HTMLInputElement>) => setMargins(prev => ({ ...prev, [e.target.name]: e.target.value }));
   const handleUnitChange = (e: React.ChangeEvent<HTMLSelectElement>) => setMarginUnit(e.target.value);
 
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+
+    Array.from(files).forEach(file => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const base64 = event.target?.result as string;
+        setUploadedImages(prev => new Map(prev).set(file.name, { base64, originalName: file.name }));
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const setMapping = (htmlPath: string, uploadedFilename: string) => {
+    setImageMappings(prev => new Map(prev).set(htmlPath, uploadedFilename));
+  };
+
+  const removeMapping = (htmlPath: string) => {
+    setImageMappings(prev => {
+      const newMap = new Map(prev);
+      newMap.delete(htmlPath);
+      return newMap;
+    });
+  };
+
+  // Auto-map images based on filename matching
+  useEffect(() => {
+    if (htmlInput && uploadedImages.size > 0) {
+      const paths = extractImagePaths(htmlInput);
+      const newMappings = new Map<string, string>();
+      
+      paths.forEach(path => {
+        const filename = path.split('/').pop() || path;
+        const uploadedFile = Array.from(uploadedImages.keys()).find(key => {
+          const uploadedFilename = key.split('/').pop() || key;
+          return uploadedFilename === filename || uploadedFilename.includes(filename) || filename.includes(uploadedFilename);
+        });
+        
+        if (uploadedFile) {
+          newMappings.set(path, uploadedFile);
+        }
+      });
+      
+      setImageMappings(newMappings);
+    }
+  }, [htmlInput, uploadedImages]);
+
+  const removeImage = (filename: string) => {
+    setUploadedImages(prev => {
+      const newMap = new Map(prev);
+      newMap.delete(filename);
+      return newMap;
+    });
+    // Also remove any mappings that used this file
+    setImageMappings(prev => {
+      const newMap = new Map(prev);
+      for (const [htmlPath, uploadedFilename] of newMap) {
+        if (uploadedFilename === filename) {
+          newMap.delete(htmlPath);
+        }
+      }
+      return newMap;
+    });
+  };
+
+  const extractImagePaths = (html: string): string[] => {
+    const paths: string[] = [];
+    
+    // Match src with double quotes: src="path"
+    const doubleQuoteRegex = /src="([^"]+)"/g;
+    let match;
+    while ((match = doubleQuoteRegex.exec(html)) !== null) {
+      if (match[1] && !match[1].startsWith('data:') && !match[1].startsWith('http')) {
+        paths.push(match[1]);
+      }
+    }
+    
+    // Match src with single quotes: src='path'
+    const singleQuoteRegex = /src='([^']+)'/g;
+    while ((match = singleQuoteRegex.exec(html)) !== null) {
+      if (match[1] && !match[1].startsWith('data:') && !match[1].startsWith('http')) {
+        paths.push(match[1]);
+      }
+    }
+    
+    // Match src without quotes: src=path
+    const noQuoteRegex = /src=([^\s>]+)/g;
+    while ((match = noQuoteRegex.exec(html)) !== null) {
+      if (match[1] && !match[1].startsWith('data:') && !match[1].startsWith('http')) {
+        paths.push(match[1]);
+      }
+    }
+    
+    // Match CSS url() with double quotes: url("path")
+    const cssUrlDoubleQuoteRegex = /url\("([^"]+)"\)/g;
+    while ((match = cssUrlDoubleQuoteRegex.exec(html)) !== null) {
+      if (match[1] && !match[1].startsWith('data:') && !match[1].startsWith('http')) {
+        paths.push(match[1]);
+      }
+    }
+    
+    // Match CSS url() with single quotes: url('path')
+    const cssUrlSingleQuoteRegex = /url\('([^']+)'\)/g;
+    while ((match = cssUrlSingleQuoteRegex.exec(html)) !== null) {
+      if (match[1] && !match[1].startsWith('data:') && !match[1].startsWith('http')) {
+        paths.push(match[1]);
+      }
+    }
+    
+    // Match CSS url() without quotes: url(path)
+    const cssUrlNoQuoteRegex = /url\(([^\s)]+)\)/g;
+    while ((match = cssUrlNoQuoteRegex.exec(html)) !== null) {
+      if (match[1] && !match[1].startsWith('data:') && !match[1].startsWith('http')) {
+        paths.push(match[1]);
+      }
+    }
+    
+    return [...new Set(paths)]; // Remove duplicates
+  };
+
+  const replaceImagePaths = (html: string): string => {
+    let modifiedHtml = html;
+    
+    imageMappings.forEach((uploadedFilename, htmlPath) => {
+      const imageData = uploadedImages.get(uploadedFilename);
+      if (imageData) {
+        const escapedPath = htmlPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        
+        // Replace in src attributes with double quotes
+        modifiedHtml = modifiedHtml.replace(
+          new RegExp(`src="${escapedPath}"`, 'g'),
+          `src="${imageData.base64}"`
+        );
+        
+        // Replace in src attributes with single quotes
+        modifiedHtml = modifiedHtml.replace(
+          new RegExp(`src='${escapedPath}'`, 'g'),
+          `src='${imageData.base64}'`
+        );
+        
+        // Replace in CSS url() with double quotes
+        modifiedHtml = modifiedHtml.replace(
+          new RegExp(`url\\("${escapedPath}"\\)`, 'g'),
+          `url("${imageData.base64}")`
+        );
+        
+        // Replace in CSS url() with single quotes
+        modifiedHtml = modifiedHtml.replace(
+          new RegExp(`url\\('${escapedPath}'\\)`, 'g'),
+          `url('${imageData.base64}')`
+        );
+        
+        // Replace in CSS url() without quotes
+        modifiedHtml = modifiedHtml.replace(
+          new RegExp(`url\\(${escapedPath}\\)`, 'g'),
+          `url("${imageData.base64}")`
+        );
+      }
+    });
+    
+    return modifiedHtml;
+  };
+
+  const getProcessedHtml = (): string => {
+    return replaceImagePaths(htmlInput);
+  };
+
   const handlePdfPreview = async () => {
     if (!htmlInput.trim()) return setError("Пожалуйста, введите HTML-код для конвертации.");
     setLoading(true);
@@ -111,7 +287,7 @@ export default function Home() {
     try {
       const res = await fetch("/api/convert-html-to-pdf", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ htmlContent: htmlInput, options: { margin: {
+        body: JSON.stringify({ htmlContent: getProcessedHtml(), options: { margin: {
           top: `${margins.top}${marginUnit}`, right: `${margins.right}${marginUnit}`,
           bottom: `${margins.bottom}${marginUnit}`, left: `${margins.left}${marginUnit}`,
         }}}),
@@ -131,7 +307,7 @@ export default function Home() {
     try {
       const res = await fetch("/api/convert-html-to-pdf", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ htmlContent: htmlInput, options: { margin: {
+        body: JSON.stringify({ htmlContent: getProcessedHtml(), options: { margin: {
           top: `${margins.top}${marginUnit}`, right: `${margins.right}${marginUnit}`,
           bottom: `${margins.bottom}${marginUnit}`, left: `${margins.left}${marginUnit}`,
         }}}),
@@ -155,7 +331,7 @@ export default function Home() {
     try {
       const res = await fetch("/api/convert-to-pptx", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ htmlContent: htmlInput }),
+        body: JSON.stringify({ htmlContent: getProcessedHtml() }),
       });
       if (!res.ok) throw new Error((await res.json()).error || "Ошибка конвертации в PPTX.");
       const blob = await res.blob();
@@ -177,7 +353,7 @@ export default function Home() {
       const res = await fetch("/api/preview-pptx", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ htmlContent: htmlInput }),
+        body: JSON.stringify({ htmlContent: getProcessedHtml() }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Ошибка генерации предпросмотра PPTX.");
@@ -218,7 +394,7 @@ export default function Home() {
       const res = await fetch("/api/convert-to-jpg", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ htmlContent: htmlInput }),
+        body: JSON.stringify({ htmlContent: getProcessedHtml() }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Ошибка конвертации в JPG.");
@@ -243,7 +419,7 @@ export default function Home() {
       const res = await fetch("/api/convert-to-jpg", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ htmlContent: htmlInput }),
+        body: JSON.stringify({ htmlContent: getProcessedHtml() }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Ошибка генерации предпросмотра JPG.");
@@ -265,7 +441,7 @@ export default function Home() {
       const res = await fetch("/api/convert-to-jpg", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ htmlContent: htmlInput }),
+        body: JSON.stringify({ htmlContent: getProcessedHtml() }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Ошибка конвертации в JPG.");
@@ -328,15 +504,28 @@ export default function Home() {
       <main className="relative w-full max-w-7xl mx-auto bg-white/70 backdrop-blur-xl rounded-2xl shadow-lg ring-1 ring-black/5 py-10 px-6 sm:px-10 z-10">
         <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-gray-900 mb-8">Конвертер Документов</h1>
         <div className="flex space-x-2 border-b-2 border-gray-300/60 mb-8">
-          <TabButton tab="pdf" label="PDF Конвертер" />
-          <TabButton tab="pptx" label="PPTX Конвертер" />
-          <TabButton tab="jpg" label="HTML to JPG" />
+          <TabButton tab="pdf" label="PDF" />
+          <TabButton tab="pptx" label="PPTX" />
+          <TabButton tab="jpg" label="JPG" />
         </div>
 
         {activeTab === 'pdf' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 sm:gap-12 w-full animate-fade-in">
             <div className="flex flex-col gap-8 col-span-1">
               <section><h2 className="text-xl font-semibold text-gray-800 mb-3">Вставьте HTML</h2><textarea className="w-full p-3 border-2 border-gray-300/60 rounded-lg bg-white/50 text-sm focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 outline-none transition-all duration-200 shadow-sm" rows={14} placeholder="Вставьте ваш HTML-код здесь..." value={htmlInput} onChange={handleHtmlInputChange} disabled={loading}></textarea></section>
+              <section><h2 className="text-xl font-semibold text-gray-800 mb-3">Загрузить изображения</h2><input type="file" multiple accept="image/*" onChange={handleImageUpload} className="w-full p-2.5 border-2 border-gray-300/60 rounded-lg bg-white/50 text-gray-900 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 outline-none transition-all duration-200" disabled={loading} />
+                {uploadedImages.size > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {Array.from(uploadedImages.entries()).map(([filename, imageData]) => (
+                      <div key={filename} className="relative group">
+                        <Image src={imageData.base64} alt={filename} width={64} height={64} className="h-16 w-16 object-cover rounded border-2 border-gray-300/60" />
+                        <button onClick={() => removeImage(filename)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity">×</button>
+                        <div className="text-xs text-gray-600 mt-1 truncate max-w-16" title={filename}>{filename}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
               <section><h2 className="text-xl font-semibold text-gray-800 mb-3">Отступы</h2><div className="grid grid-cols-5 gap-3 p-4 border-2 border-gray-300/60 rounded-xl bg-white/50 shadow-sm"><div className="flex flex-col gap-1"><label htmlFor="top" className="text-xs font-medium text-gray-600">Верх</label><Input type="number" name="top" value={margins.top} onChange={handleMarginChange} /></div><div className="flex flex-col gap-1"><label htmlFor="right" className="text-xs font-medium text-gray-600">Право</label><Input type="number" name="right" value={margins.right} onChange={handleMarginChange} /></div><div className="flex flex-col gap-1"><label htmlFor="bottom" className="text-xs font-medium text-gray-600">Низ</label><Input type="number" name="bottom" value={margins.bottom} onChange={handleMarginChange} /></div><div className="flex flex-col gap-1"><label htmlFor="left" className="text-xs font-medium text-gray-600">Лево</label><Input type="number" name="left" value={margins.left} onChange={handleMarginChange} /></div><div className="flex flex-col gap-1"><label htmlFor="unit" className="text-xs font-medium text-gray-600">Ед.</label><Select name="unit" value={marginUnit} onChange={handleUnitChange}><option value="mm">mm</option><option value="cm">cm</option><option value="in">in</option><option value="px">px</option></Select></div></div></section>
               <section><h2 className="text-xl font-semibold text-gray-800 mb-3">Действия</h2>
                 <div className="flex items-center gap-4">
@@ -356,6 +545,48 @@ export default function Home() {
                   {pdfPreviewUrl && !error && (<iframe src={pdfPreviewUrl} className="w-full h-full" title="PDF Preview"></iframe>)}
                   {!loading && !error && !pdfPreviewUrl && <div className="text-gray-400">Здесь появится предпросмотр PDF</div>}
                 </div>
+                {isMounted && (
+                  <section className="mt-4"><h2 className="text-lg font-semibold text-gray-800 mb-2">Сопоставить изображения</h2>
+                    {htmlInput && extractImagePaths(htmlInput).length > 0 && (
+                      <div className="space-y-2 max-h-64 overflow-y-auto">
+                        {extractImagePaths(htmlInput).map((path) => {
+                          const mappedFile = imageMappings.get(path);
+                          const mappedImageData = mappedFile ? uploadedImages.get(mappedFile) : null;
+                          const fileName = path.split('/').pop() || path;
+                          
+                          return (
+                            <div key={path} className="flex items-center gap-3 border-2 border-gray-300/60 rounded-lg bg-white/50 p-2">
+                              <div className="w-12 h-12 border-2 border-gray-300/60 rounded bg-gray-100 flex items-center justify-center overflow-hidden flex-shrink-0">
+                                {mappedImageData ? (
+                                  <img src={mappedImageData.base64} alt={path} className="w-full h-full object-cover" />
+                                ) : (
+                                  <div className="text-xs text-gray-400">-</div>
+                                )}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="text-xs font-mono text-gray-700 truncate" title={path}>{fileName}</div>
+                                <div className="text-xs text-gray-500 truncate" title={path}>{path}</div>
+                              </div>
+                              <select 
+                                value={mappedFile || ''}
+                                onChange={(e) => e.target.value ? setMapping(path, e.target.value) : removeMapping(path)}
+                                className="flex-shrink-0 w-32 p-1.5 text-xs border-2 border-gray-300/60 rounded bg-white/50 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 outline-none"
+                              >
+                                <option value="">...</option>
+                                {Array.from(uploadedImages.entries()).map(([filename, imageData]) => (
+                                  <option key={filename} value={filename}>{filename}</option>
+                                ))}
+                              </select>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {htmlInput && extractImagePaths(htmlInput).length === 0 && (
+                      <div className="text-xs text-gray-500">Изображения в HTML не найдены</div>
+                    )}
+                  </section>
+                )}
             </div>
           </div>
         )}
@@ -364,6 +595,19 @@ export default function Home() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 sm:gap-12 w-full animate-fade-in">
             <div className="flex flex-col gap-8">
               <section><h2 className="text-xl font-semibold text-gray-800 mb-3">Вставьте HTML</h2><textarea className="w-full p-3 border-2 border-gray-300/60 rounded-lg bg-white/50 text-sm focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 outline-none transition-all duration-200 shadow-sm" rows={8} placeholder="Вставьте ваш HTML-код здесь..." value={htmlInput} onChange={handleHtmlInputChange} disabled={loading}></textarea></section>
+              <section><h2 className="text-xl font-semibold text-gray-800 mb-3">Загрузить изображения</h2><input type="file" multiple accept="image/*" onChange={handleImageUpload} className="w-full p-2.5 border-2 border-gray-300/60 rounded-lg bg-white/50 text-gray-900 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 outline-none transition-all duration-200" disabled={loading} />
+                {uploadedImages.size > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {Array.from(uploadedImages.entries()).map(([filename, imageData]) => (
+                      <div key={filename} className="relative group">
+                        <Image src={imageData.base64} alt={filename} width={64} height={64} className="h-16 w-16 object-cover rounded border-2 border-gray-300/60" />
+                        <button onClick={() => removeImage(filename)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity">×</button>
+                        <div className="text-xs text-gray-600 mt-1 truncate max-w-16" title={filename}>{filename}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
               <section><h2 className="text-xl font-semibold text-gray-800 mb-3">Действия</h2>
                 <div className="flex items-center gap-4">
                     <ActionButton onClick={handlePptxPreview}><EyeIcon />Предпросмотр</ActionButton>
@@ -403,6 +647,48 @@ export default function Home() {
                 )}
                 {!loading && !error && pptxPreviewImages.length === 0 && <div className="text-gray-400">Здесь появится предпросмотр PPTX</div>}
               </div>
+              {isMounted && (
+                <section className="mt-4"><h2 className="text-lg font-semibold text-gray-800 mb-2">Сопоставить изображения</h2>
+                  {htmlInput && extractImagePaths(htmlInput).length > 0 && (
+                    <div className="space-y-2 max-h-64 overflow-y-auto">
+                      {extractImagePaths(htmlInput).map((path) => {
+                        const mappedFile = imageMappings.get(path);
+                        const mappedImageData = mappedFile ? uploadedImages.get(mappedFile) : null;
+                        const fileName = path.split('/').pop() || path;
+                        
+                        return (
+                          <div key={path} className="flex items-center gap-3 border-2 border-gray-300/60 rounded-lg bg-white/50 p-2">
+                            <div className="w-12 h-12 border-2 border-gray-300/60 rounded bg-gray-100 flex items-center justify-center overflow-hidden flex-shrink-0">
+                              {mappedImageData ? (
+                                <img src={mappedImageData.base64} alt={path} className="w-full h-full object-cover" />
+                              ) : (
+                                <div className="text-xs text-gray-400">-</div>
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-xs font-mono text-gray-700 truncate" title={path}>{fileName}</div>
+                              <div className="text-xs text-gray-500 truncate" title={path}>{path}</div>
+                            </div>
+                            <select 
+                              value={mappedFile || ''}
+                              onChange={(e) => e.target.value ? setMapping(path, e.target.value) : removeMapping(path)}
+                              className="flex-shrink-0 w-32 p-1.5 text-xs border-2 border-gray-300/60 rounded bg-white/50 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 outline-none"
+                            >
+                              <option value="">...</option>
+                              {Array.from(uploadedImages.entries()).map(([filename]) => (
+                                <option key={filename} value={filename}>{filename}</option>
+                              ))}
+                            </select>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {htmlInput && extractImagePaths(htmlInput).length === 0 && (
+                    <div className="text-xs text-gray-500">Изображения в HTML не найдены</div>
+                  )}
+                </section>
+              )}
             </div>
           </div>
         )}
@@ -411,6 +697,19 @@ export default function Home() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 sm:gap-12 w-full animate-fade-in">
             <div className="flex flex-col gap-8">
               <section><h2 className="text-xl font-semibold text-gray-800 mb-3">Вставьте HTML</h2><textarea className="w-full p-3 border-2 border-gray-300/60 rounded-lg bg-white/50 text-sm focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 outline-none transition-all duration-200 shadow-sm" rows={8} placeholder="Вставьте ваш HTML-код здесь..." value={htmlInput} onChange={handleHtmlInputChange} disabled={loading}></textarea></section>
+              <section><h2 className="text-xl font-semibold text-gray-800 mb-3">Загрузить изображения</h2><input type="file" multiple accept="image/*" onChange={handleImageUpload} className="w-full p-2.5 border-2 border-gray-300/60 rounded-lg bg-white/50 text-gray-900 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 outline-none transition-all duration-200" disabled={loading} />
+                {uploadedImages.size > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {Array.from(uploadedImages.entries()).map(([filename, imageData]) => (
+                      <div key={filename} className="relative group">
+                        <Image src={imageData.base64} alt={filename} width={64} height={64} className="h-16 w-16 object-cover rounded border-2 border-gray-300/60" />
+                        <button onClick={() => removeImage(filename)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity">×</button>
+                        <div className="text-xs text-gray-600 mt-1 truncate max-w-16" title={filename}>{filename}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
               <section><h2 className="text-xl font-semibold text-gray-800 mb-3">Действия</h2>
                 <div className="flex flex-wrap items-center gap-3">
                     <ActionButton onClick={handleJpgPreview}><EyeIcon />Предпросмотр</ActionButton>
@@ -453,6 +752,48 @@ export default function Home() {
                 )}
                 {!loading && !error && jpgPreviewImages.length === 0 && <div className="text-gray-400">Здесь появится предпросмотр JPG</div>}
               </div>
+              {isMounted && (
+                <section className="mt-4"><h2 className="text-lg font-semibold text-gray-800 mb-2">Сопоставить изображения</h2>
+                  {htmlInput && extractImagePaths(htmlInput).length > 0 && (
+                    <div className="space-y-2 max-h-64 overflow-y-auto">
+                      {extractImagePaths(htmlInput).map((path) => {
+                        const mappedFile = imageMappings.get(path);
+                        const mappedImageData = mappedFile ? uploadedImages.get(mappedFile) : null;
+                        const fileName = path.split('/').pop() || path;
+                        
+                        return (
+                          <div key={path} className="flex items-center gap-3 border-2 border-gray-300/60 rounded-lg bg-white/50 p-2">
+                            <div className="w-12 h-12 border-2 border-gray-300/60 rounded bg-gray-100 flex items-center justify-center overflow-hidden flex-shrink-0">
+                              {mappedImageData ? (
+                                <img src={mappedImageData.base64} alt={path} className="w-full h-full object-cover" />
+                              ) : (
+                                <div className="text-xs text-gray-400">-</div>
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-xs font-mono text-gray-700 truncate" title={path}>{fileName}</div>
+                              <div className="text-xs text-gray-500 truncate" title={path}>{path}</div>
+                            </div>
+                            <select 
+                              value={mappedFile || ''}
+                              onChange={(e) => e.target.value ? setMapping(path, e.target.value) : removeMapping(path)}
+                              className="flex-shrink-0 w-32 p-1.5 text-xs border-2 border-gray-300/60 rounded bg-white/50 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 outline-none"
+                            >
+                              <option value="">...</option>
+                              {Array.from(uploadedImages.entries()).map(([filename]) => (
+                                <option key={filename} value={filename}>{filename}</option>
+                              ))}
+                            </select>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {htmlInput && extractImagePaths(htmlInput).length === 0 && (
+                    <div className="text-xs text-gray-500">Изображения в HTML не найдены</div>
+                  )}
+                </section>
+              )}
             </div>
           </div>
         )}

@@ -22,6 +22,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    console.log('Received HTML content for PDF conversion');
+    console.log('HTML length:', htmlContent.length);
+    console.log('First 500 chars:', htmlContent.substring(0, 500));
+    
+    // Check for data URIs in the HTML
+    const dataUriCount = (htmlContent.match(/data:image/g) || []).length;
+    console.log('Number of data:image URIs found:', dataUriCount);
+
     const browser = await puppeteer.launch({
       headless: true, // Always headless for server-side operations
       args: [
@@ -44,7 +52,7 @@ export async function POST(req: NextRequest) {
       deviceScaleFactor: 1,
     });
 
-    await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
+    await page.setContent(htmlContent, { waitUntil: 'load' });
 
     const pdfBuffer = await page.pdf({
       format: 'A4',
