@@ -76,9 +76,17 @@ COPY . .
 # Предполагается, что в вашем `package.json` есть скрипт "build"
 RUN npm run build
 
+# Для standalone режима нужно скопировать статические файлы
+# Standalone сервер ожидает public и .next/static в правильных местах
+RUN cp -r public .next/standalone/ 2>/dev/null || true
+RUN cp -r .next/static .next/standalone/.next/ 2>/dev/null || true
+
 # Открыть порт, на котором прослушивает ваше приложение Next.js
 EXPOSE 3000
 
-# Команда для запуска приложения
-# Предполагается, что в вашем `package.json` есть скрипт "start"
-CMD ["npm", "run", "start"]
+# Railway предоставляет PORT переменную окружения
+ENV PORT=3000
+
+# Команда для запуска standalone сервера
+# Standalone сервер автоматически использует PORT из env
+CMD ["node", ".next/standalone/server.js"]
