@@ -37,6 +37,17 @@ const WavyBackground = () => (
 );
 
 
+const PdfInstruction = () => (
+  <div className="prose prose-sm max-w-none text-gray-600 bg-white/50 p-4 rounded-xl border-2 border-gray-300/60 shadow-sm">
+    <h4 className="text-gray-800">Ожидаемый формат HTML для PDF</h4>
+    <p>Конвертер рендерит весь HTML как веб-страницу и сохраняет в формат A4. Никаких специальных классов не нужно — подходит любой HTML.</p>
+    <p>Отступы задаются через настройки выше. По умолчанию — 1cm со всех сторон.</p>
+    <p>Для управления разрывами страниц используй CSS:</p>
+    <pre><code className="text-xs">{`page-break-before: always; /* начать новую страницу */
+page-break-inside: avoid;  /* не разрывать элемент */`}</code></pre>
+  </div>
+);
+
 const PptxInstruction = () => (
   <div className="prose prose-sm max-w-none text-gray-600 bg-white/50 p-4 rounded-xl border-2 border-gray-300/60 shadow-sm">
     <h4 className="text-gray-800">Ожидаемый формат HTML для PPTX</h4>
@@ -531,6 +542,7 @@ export default function Home() {
 
                 </div>
               </section>
+              <section><h2 className="text-xl font-semibold text-gray-800 mb-3">Инструкция</h2><PdfInstruction /></section>
             </div>
             <div className="flex flex-col gap-4 w-full col-span-1 lg:col-span-2">
                 <h2 className="text-xl font-semibold text-gray-800">Предпросмотр</h2>
