@@ -57,18 +57,33 @@ function detectSlideDimensions(
 
 async function makeAllSlidesVisible(page: Page): Promise<void> {
   await page.evaluate(() => {
+    // Collect strict ancestors of div.slide (carousel containers only, not the slides themselves)
+    const slideAncestors = new Set<Element>();
+    document.querySelectorAll("div.slide").forEach((slide) => {
+      let el = slide.parentElement;
+      while (el && el !== document.body) {
+        slideAncestors.add(el);
+        el = el.parentElement;
+      }
+    });
+    // Also collect the slides themselves so we can EXCLUDE them from overflow removal
+    const slides = new Set<Element>(document.querySelectorAll("div.slide"));
+
     document.querySelectorAll("*").forEach((el) => {
       const e = el as HTMLElement;
       if (!e.style) return;
       const computed = window.getComputedStyle(e);
-      if (computed.transform !== "none") {
-        e.style.transform = "none";
-        e.style.marginBottom = "0";
-      }
-      e.style.maxWidth = "none";
-      e.style.maxHeight = "none";
-      if (computed.overflow === "hidden") {
-        e.style.overflow = "visible";
+      // Only touch carousel ancestors — never modify anything inside slides
+      if (slideAncestors.has(el) && !slides.has(el)) {
+        if (computed.transform !== "none") {
+          e.style.transform = "none";
+          e.style.marginBottom = "0";
+        }
+        e.style.maxWidth = "none";
+        e.style.maxHeight = "none";
+        if (computed.overflow === "hidden") {
+          e.style.overflow = "visible";
+        }
       }
     });
     const firstSlide = document.querySelector("div.slide") as HTMLElement;

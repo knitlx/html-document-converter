@@ -41,28 +41,16 @@ const PptxInstruction = () => (
   <div className="prose prose-sm max-w-none text-gray-600 bg-white/50 p-4 rounded-xl border-2 border-gray-300/60 shadow-sm">
     <h4 className="text-gray-800">Ожидаемый формат HTML для PPTX</h4>
     <p>
-      Конвертер ищет в коде блоки <code>&lt;div class=&quot;slide&quot;&gt;</code>. Каждый такой блок будет преобразован в отдельный слайд-картинку в презентации.
+      Конвертер ищет блоки <code>&lt;div class=&quot;slide&quot;&gt;</code> — каждый становится отдельным слайдом в презентации.
     </p>
-    <p>Все стили, необходимые для отображения слайдов, должны быть определены внутри тега <code>&lt;head&gt;</code> вашего HTML.</p>
+    <p>Все стили — внутри <code>&lt;head&gt;</code>. В CSS обязательно укажи размеры слайда в пикселях — по ним конвертер задаёт размер презентации:</p>
     <pre><code className="text-xs">
-{`<!DOCTYPE html>
-<html>
-<head>
-  <style>
-    .slide { background-color: #fff; }
-    h1 { color: #333; }
-  </style>
-</head>
-<body>
-  <div class="slide">
-    <h1>Слайд 1</h1>
-  </div>
-  <div class="slide">
-    <h1>Слайд 2</h1>
-  </div>
-</body>
-</html>`}
+{`.slide {
+  width: 1080px;   /* обязательно */
+  height: 1350px;  /* обязательно */
+}`}
     </code></pre>
+    <p>Без этих значений используется размер по умолчанию 1080×1080px. Поддерживаются любые пропорции: квадрат, вертикальный, горизонтальный формат.</p>
   </div>
 );
 
@@ -70,9 +58,16 @@ const JpgInstruction = () => (
   <div className="prose prose-sm max-w-none text-gray-600 bg-white/50 p-4 rounded-xl border-2 border-gray-300/60 shadow-sm">
     <h4 className="text-gray-800">Ожидаемый формат HTML для JPG</h4>
     <p>
-      Конвертер ищет в коде блоки <code>&lt;div class=&quot;slide&quot;&gt;</code>. Каждый такой блок будет сохранен как отдельный JPG-файл.
+      Конвертер ищет блоки <code>&lt;div class=&quot;slide&quot;&gt;</code> — каждый сохраняется как отдельный JPG.
     </p>
-    <p>Все стили, необходимые для отображения слайдов, должны быть определены внутри тега <code>&lt;head&gt;</code> вашего HTML.</p>
+    <p>Все стили — внутри <code>&lt;head&gt;</code>. В CSS обязательно укажи размеры слайда в пикселях:</p>
+    <pre><code className="text-xs">
+{`.slide {
+  width: 1080px;   /* обязательно */
+  height: 1350px;  /* обязательно */
+}`}
+    </code></pre>
+    <p>Без этих значений используется размер по умолчанию 1080×1080px.</p>
   </div>
 );
 
