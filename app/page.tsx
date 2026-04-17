@@ -100,6 +100,17 @@ export default function Home() {
 
 
   const handleHtmlInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => setHtmlInput(e.target.value);
+
+  const handleHtmlFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setHtmlInput(event.target?.result as string);
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
   const handleMarginChange = (e: React.ChangeEvent<HTMLInputElement>) => setMargins(prev => ({ ...prev, [e.target.name]: e.target.value }));
   const handleUnitChange = (e: React.ChangeEvent<HTMLSelectElement>) => setMarginUnit(e.target.value);
 
@@ -507,7 +518,7 @@ export default function Home() {
         {activeTab === 'pdf' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 sm:gap-12 w-full animate-fade-in">
             <div className="flex flex-col gap-8 col-span-1">
-              <section><h2 className="text-xl font-semibold text-gray-800 mb-3">Вставьте HTML</h2><textarea className="w-full p-3 border-2 border-gray-300/60 rounded-lg bg-white/50 text-sm focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 outline-none transition-all duration-200 shadow-sm" rows={14} placeholder="Вставьте ваш HTML-код здесь..." value={htmlInput} onChange={handleHtmlInputChange} disabled={loading}></textarea></section>
+              <section><div className="flex items-center justify-between mb-3"><h2 className="text-xl font-semibold text-gray-800">Вставьте HTML</h2><label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-gray-700 bg-white border-2 border-gray-300/60 rounded-lg hover:bg-gray-50 transition-colors"><svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>Загрузить файл<input type="file" accept=".html,.htm" onChange={handleHtmlFileUpload} className="hidden" disabled={loading} /></label></div><textarea className="w-full p-3 border-2 border-gray-300/60 rounded-lg bg-white/50 text-sm focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 outline-none transition-all duration-200 shadow-sm" rows={14} placeholder="Вставьте ваш HTML-код здесь..." value={htmlInput} onChange={handleHtmlInputChange} disabled={loading}></textarea></section>
               <section><h2 className="text-xl font-semibold text-gray-800 mb-3">Загрузить изображения</h2><input type="file" multiple accept="image/*" onChange={handleImageUpload} className="w-full p-2.5 border-2 border-gray-300/60 rounded-lg bg-white/50 text-gray-900 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 outline-none transition-all duration-200" disabled={loading} />
                 {uploadedImages.size > 0 && (
                   <div className="mt-2 flex flex-wrap gap-2">
@@ -590,7 +601,7 @@ export default function Home() {
         {activeTab === 'pptx' && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 sm:gap-12 w-full animate-fade-in">
             <div className="flex flex-col gap-8">
-              <section><h2 className="text-xl font-semibold text-gray-800 mb-3">Вставьте HTML</h2><textarea className="w-full p-3 border-2 border-gray-300/60 rounded-lg bg-white/50 text-sm focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 outline-none transition-all duration-200 shadow-sm" rows={8} placeholder="Вставьте ваш HTML-код здесь..." value={htmlInput} onChange={handleHtmlInputChange} disabled={loading}></textarea></section>
+              <section><div className="flex items-center justify-between mb-3"><h2 className="text-xl font-semibold text-gray-800">Вставьте HTML</h2><label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-gray-700 bg-white border-2 border-gray-300/60 rounded-lg hover:bg-gray-50 transition-colors"><svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>Загрузить файл<input type="file" accept=".html,.htm" onChange={handleHtmlFileUpload} className="hidden" disabled={loading} /></label></div><textarea className="w-full p-3 border-2 border-gray-300/60 rounded-lg bg-white/50 text-sm focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 outline-none transition-all duration-200 shadow-sm" rows={8} placeholder="Вставьте ваш HTML-код здесь..." value={htmlInput} onChange={handleHtmlInputChange} disabled={loading}></textarea></section>
               <section><h2 className="text-xl font-semibold text-gray-800 mb-3">Загрузить изображения</h2><input type="file" multiple accept="image/*" onChange={handleImageUpload} className="w-full p-2.5 border-2 border-gray-300/60 rounded-lg bg-white/50 text-gray-900 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 outline-none transition-all duration-200" disabled={loading} />
                 {uploadedImages.size > 0 && (
                   <div className="mt-2 flex flex-wrap gap-2">
@@ -692,7 +703,7 @@ export default function Home() {
         {activeTab === 'jpg' && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 sm:gap-12 w-full animate-fade-in">
             <div className="flex flex-col gap-8">
-              <section><h2 className="text-xl font-semibold text-gray-800 mb-3">Вставьте HTML</h2><textarea className="w-full p-3 border-2 border-gray-300/60 rounded-lg bg-white/50 text-sm focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 outline-none transition-all duration-200 shadow-sm" rows={8} placeholder="Вставьте ваш HTML-код здесь..." value={htmlInput} onChange={handleHtmlInputChange} disabled={loading}></textarea></section>
+              <section><div className="flex items-center justify-between mb-3"><h2 className="text-xl font-semibold text-gray-800">Вставьте HTML</h2><label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-gray-700 bg-white border-2 border-gray-300/60 rounded-lg hover:bg-gray-50 transition-colors"><svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>Загрузить файл<input type="file" accept=".html,.htm" onChange={handleHtmlFileUpload} className="hidden" disabled={loading} /></label></div><textarea className="w-full p-3 border-2 border-gray-300/60 rounded-lg bg-white/50 text-sm focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 outline-none transition-all duration-200 shadow-sm" rows={8} placeholder="Вставьте ваш HTML-код здесь..." value={htmlInput} onChange={handleHtmlInputChange} disabled={loading}></textarea></section>
               <section><h2 className="text-xl font-semibold text-gray-800 mb-3">Загрузить изображения</h2><input type="file" multiple accept="image/*" onChange={handleImageUpload} className="w-full p-2.5 border-2 border-gray-300/60 rounded-lg bg-white/50 text-gray-900 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 outline-none transition-all duration-200" disabled={loading} />
                 {uploadedImages.size > 0 && (
                   <div className="mt-2 flex flex-wrap gap-2">
