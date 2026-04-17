@@ -10,7 +10,7 @@ export async function POST(request: Request) {
 
     const { buffers } = await renderSlides(htmlContent);
     const images = buffers.map(
-      (buf) => `data:image/png;base64,${Buffer.from(buf).toString('base64')}`
+      (buf) => `data:image/jpeg;base64,${Buffer.from(buf).toString('base64')}`
     );
 
     return NextResponse.json({ images });

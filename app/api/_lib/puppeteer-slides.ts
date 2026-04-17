@@ -150,6 +150,8 @@ export async function renderSlides(
       }
       const screenshot = await page.screenshot({
         clip: { x: box.x, y: box.y, width: slideWidth, height: slideHeight },
+        type: 'jpeg',
+        quality: 85,
       });
       buffers.push(screenshot);
       console.log(`Slide ${i + 1} captured, box:`, box);
