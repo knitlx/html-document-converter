@@ -43,8 +43,7 @@ const PdfInstruction = () => (
     <p>Конвертер рендерит весь HTML как веб-страницу и сохраняет в формат A4. Никаких специальных классов не нужно — подходит любой HTML.</p>
     <p>Отступы задаются через настройки выше. По умолчанию — 1cm со всех сторон.</p>
     <p>Для управления разрывами страниц используй CSS:</p>
-    <pre><code className="text-xs">{`page-break-before: always; /* начать новую страницу */
-page-break-inside: avoid;  /* не разрывать элемент */`}</code></pre>
+    <pre className="overflow-x-auto"><code className="text-xs">{`page-break-before: always;\npage-break-inside: avoid;`}</code></pre>
   </div>
 );
 
@@ -55,12 +54,7 @@ const PptxInstruction = () => (
       Конвертер ищет блоки <code>&lt;div class=&quot;slide&quot;&gt;</code> — каждый становится отдельным слайдом в презентации.
     </p>
     <p>Все стили — внутри <code>&lt;head&gt;</code>. В CSS обязательно укажи размеры слайда в пикселях — по ним конвертер задаёт размер презентации:</p>
-    <pre><code className="text-xs">
-{`.slide {
-  width: 1080px;   /* обязательно */
-  height: 1350px;  /* обязательно */
-}`}
-    </code></pre>
+    <pre className="overflow-x-auto"><code className="text-xs">{`.slide {\n  width: 1080px;\n  height: 1350px;\n}`}</code></pre>
     <p>Без этих значений используется размер по умолчанию 1080×1080px. Поддерживаются любые пропорции: квадрат, вертикальный, горизонтальный формат.</p>
   </div>
 );
@@ -72,12 +66,7 @@ const JpgInstruction = () => (
       Конвертер ищет блоки <code>&lt;div class=&quot;slide&quot;&gt;</code> — каждый сохраняется как отдельный JPG.
     </p>
     <p>Все стили — внутри <code>&lt;head&gt;</code>. В CSS обязательно укажи размеры слайда в пикселях:</p>
-    <pre><code className="text-xs">
-{`.slide {
-  width: 1080px;   /* обязательно */
-  height: 1350px;  /* обязательно */
-}`}
-    </code></pre>
+    <pre className="overflow-x-auto"><code className="text-xs">{`.slide {\n  width: 1080px;\n  height: 1350px;\n}`}</code></pre>
     <p>Без этих значений используется размер по умолчанию 1080×1080px.</p>
   </div>
 );
